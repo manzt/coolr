@@ -1,6 +1,6 @@
-import { unzip, HTTPRangeReader, ZipEntry } from 'unzipit';
+import { HTTPRangeReader, unzip, ZipEntry } from "unzipit";
 
-let removePrefix = (key: string) => key[0] === '/' ? key.slice(1) : key;
+let removePrefix = (key: string) => key[0] === "/" ? key.slice(1) : key;
 
 export class ZipFileStore {
 	constructor(public refs: Record<string, ZipEntry>) {}
@@ -17,12 +17,12 @@ export class ZipFileStore {
 
 	static async fromUrl(href: string) {
 		let reader = new HTTPRangeReader(href);
-		let {entries} = await unzip(reader as any);
+		let { entries } = await unzip(reader as any);
 		return new ZipFileStore(entries);
 	}
 
 	static async fromBlob(blob: Blob) {
-		let {entries} = await unzip(blob);
+		let { entries } = await unzip(blob);
 		return new ZipFileStore(entries);
 	}
 }
