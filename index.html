@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+	<head>
+		<meta charset="UTF-8" />
+		<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤠</text></svg>">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+		<link rel="stylesheet" href="https://unpkg.com/higlass@1.11.7/dist/hglib.css">
+
+		<script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+		<script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+		<script src="https://unpkg.com/pixi.js@6/dist/browser/pixi.min.js"></script>
+		<script src="https://unpkg.com/react-bootstrap@0.32.1/dist/react-bootstrap.min.js"></script>
+		<script src="https://unpkg.com/higlass@1.11.7/dist/hglib.min.js"></script>
+
+		<title>cool rdr</title>
+	</head>
+
+	<style type="text/css">
+		html, body {
+			width: 100vw;
+			height: 100vh;
+			overflow: hidden;
+		}
+	</style>
+
+
+	<div>
+		<label for="file">Choose file to upload</label>
+		<input type="file" id="file" name="file" accept=".zip">
+	</div>
+
+	<script type="module">
+		import { main } from '/src/index.ts';
+		main();
+
+		/* PIXI.utils.skipHello();
+		const api = window.hglib.viewer(
+			document.body,
+			'https://higlass.io/api/v1/viewconfs/?d=default',
+			{ bounded: true },
+		);
+		*/
+	</script>
+</html>

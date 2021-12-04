@@ -1,0 +1,10 @@
+node_modules
+pnpm-global
+.DS_Store
+dist
+dist-ssr
+*.local
+
+*.zarr
+*.zarr.zip
+*.mcool
