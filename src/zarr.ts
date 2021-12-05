@@ -3,6 +3,11 @@ import { registry } from "zarrita";
 import ReadOnlyStore from "zarrita/storage/readonly";
 import type { AsyncStore } from "zarrita/types";
 
+export { slice, ZarrArray } from "zarrita";
+export { get_hierarchy } from "zarrita/v2";
+export { get } from "zarrita/ndarray";
+export { default as FetchStore } from "zarrita/storage/fetch";
+
 type Importer = Parameters<typeof registry["set"]>[1];
 
 function unwrap(fn: () => Promise<{ default: unknown }>) {
@@ -49,24 +54,25 @@ export class ZipFileStore extends ReadOnlyStore {
 	}
 }
 
-export { slice, ZarrArray } from "zarrita";
-export { get_hierarchy } from "zarrita/v2";
-export { get } from "zarrita/ndarray";
-export { default as FetchStore } from "zarrita/storage/fetch";
+type ConsolidatedMetadata = {
+	metadata: Record<string, Record<string, any>>;
+	zarr_consolidated_format: 1;
+};
 
-type ConsolidatedMetadata = Record<string, Record<string, any>>;
-
-export function withConsolidatedMetadata<Store extends AsyncStore>(
+/**
+ * Proxies requests to the underlying store.
+ */
+export function consolidated<Store extends AsyncStore>(
 	store: Store,
-	meta: ConsolidatedMetadata,
+	{ metadata }: ConsolidatedMetadata,
 ) {
 	let encoder = new TextEncoder();
 	let get = (target: Store, prop: string) => {
 		if (prop === "get") {
 			return (key: string) => {
 				let prefix = key[0] === "/" ? key.slice(1) : key;
-				if (prefix in meta) {
-					let str = JSON.stringify(meta[prefix]);
+				if (prefix in metadata) {
+					let str = JSON.stringify(metadata[prefix]);
 					return Promise.resolve(encoder.encode(str));
 				}
 				return target.get(key);
@@ -76,7 +82,7 @@ export function withConsolidatedMetadata<Store extends AsyncStore>(
 		if (prop === "has") {
 			return (key: string) => {
 				let prefix = key[0] === "/" ? key.slice(1) : key;
-				if (prefix in meta) return Promise.resolve(true);
+				if (prefix in metadata) return Promise.resolve(true);
 				return target.has(key);
 			};
 		}
@@ -85,10 +91,4 @@ export function withConsolidatedMetadata<Store extends AsyncStore>(
 	};
 
 	return new Proxy(store, { get });
-}
-
-export async function getJson<T = any>(store: AsyncStore, path: string) {
-	let bytes = await store.get(path);
-	if (!bytes) throw new Error("no json");
-	return JSON.parse(new TextDecoder().decode(bytes)) as T;
 }

@@ -16,9 +16,6 @@ type Dataset<
 		: never;
 };
 
-export type ParsedPath<Path extends string> = Path extends
-	`${infer Grp}/${infer Col}` ? [Grp, Col] : never;
-
 export interface CoolerInfo {
 	"format": string;
 	"format-version": number;

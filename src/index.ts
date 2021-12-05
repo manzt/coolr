@@ -1,14 +1,13 @@
 import {
+	consolidated,
 	FetchStore,
 	get,
 	get_hierarchy,
-	getJson,
 	slice,
-	withConsolidatedMetadata,
 	ZipFileStore,
 } from "./zarr";
 import type { AsyncStore } from "zarrita/types";
-import type { CoolerDataset, CoolerInfo, ParsedPath, SliceData } from "./types";
+import type { CoolerDataset, CoolerInfo, SliceData } from "./types";
 
 class Indexer1D<
 	Group extends keyof CoolerDataset,
@@ -104,10 +103,11 @@ export class Cooler<Store extends AsyncStore> {
 	matrix() {/* TODO */}
 
 	static async fromZarr<Store extends AsyncStore>(store: Store) {
-		// TODO: check?
-		let cmeta = await getJson(store, ".zmetadata").catch((_) => undefined);
-		if (cmeta) {
-			store = withConsolidatedMetadata(store, cmeta.metadata);
+		// https://zarr.readthedocs.io/en/stable/_modules/zarr/convenience.html#consolidate_metadata
+		let bytes = await store.get(".zmetadata");
+		if (bytes) {
+			let str = new TextDecoder().decode(bytes);
+			store = consolidated(store, JSON.parse(str));
 		}
 
 		let paths = [
@@ -125,20 +125,20 @@ export class Cooler<Store extends AsyncStore> {
 		] as const;
 
 		let h = get_hierarchy(store);
-		let [info, arrays] = await Promise.all([
+		let [info, ...arrays] = await Promise.all([
 			h.get_group("/").then((grp) => grp.attrs),
-			Promise.all(paths.map((p) => h.get_array(p))),
+			...paths.map((p) => h.get_array(p)),
 		]);
-		let data: CoolerDataset = arrays.reduce((data: any, arr, i) => {
-			let [grp, col] = paths[i].split("/") as ParsedPath<
-				typeof paths[typeof i]
-			>;
-			if (!data[grp]) data[grp] = {};
-			data[grp][col] = arr;
-			return data;
-		}, {});
 
-		return new Cooler(info as CoolerInfo, data);
+		return new Cooler(
+			info as CoolerInfo,
+			arrays.reduce((data: any, arr, i) => {
+				let [grp, col] = paths[i].split("/");
+				if (!data[grp]) data[grp] = {};
+				data[grp][col] = arr;
+				return data;
+			}, {}),
+		);
 	}
 }
 
