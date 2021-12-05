@@ -1,172 +1,92 @@
-// @ts-ignore
-import * as zarr from "zarrita";
-// @ts-ignore
-import { get } from "zarrita/ndarray";
-// @ts-ignore
-import HTTPStore from "zarrita/storage/http";
+import {
+	FetchStore,
+	get,
+	get_hierarchy,
+	getJson,
+	slice,
+	withConsolidatedMetadata,
+	ZipFileStore,
+} from "./zarr";
+import type { AsyncStore } from "zarrita/types";
+import type { CoolerDataset, CoolerInfo, ParsedPath, SliceData } from "./types";
 
-import { ZipFileStore } from "./zip";
-
-// add codecs to registry
-for (let id of ["gzip", "zlib", "zstd", "lz4", "blosc"]) {
-	let base = "https://cdn.skypack.dev/numcodecs/";
-	let href = base + id;
-	zarr.registry.set(id, () => import(href).then((m) => m.default));
-}
-
-type Store = any;
-
-interface CoolerData {
-	info: CoolerInfo;
-	bins: {
-		chrom: zarr.ZarrArray;
-		end: zarr.ZarrArray;
-		start: zarr.ZarrArray;
-		weight: zarr.ZarrArray; // optional, includes meta
-	};
-	chroms: {
-		name: string[];
-		length: number[];
-	};
-	indexes: {
-		bin1_offset: zarr.ZarrArray;
-		chrom_offset: zarr.ZarrArray;
-	};
-	pixels: {
-		bin1_id: zarr.ZarrArray;
-		bin2_id: zarr.ZarrArray;
-		count: zarr.ZarrArray;
-	};
-}
-
-async function getCodec(config?: Record<string, any>) {
-	if (!config) return;
-	let importer = zarr.registry.get(config.id);
-	if (!importer) throw new Error("missing codec" + config.id);
-	let ctr = await importer();
-	return ctr.fromConfig(config);
-}
-
-let keyPrefix = (path: string) => path.length > 1 ? path + "/" : "";
-
-let chunkKey = (path: string, chunk_separator: "." | "/") => {
-	let prefix = keyPrefix(path);
-	return (chunk_coords: number[]) => {
-		let chunk_identifier = chunk_coords.join(chunk_separator);
-		let chunk_key = prefix + chunk_identifier;
-		return chunk_key;
-	};
-};
-
-async function loadGroup<Name extends string, Key extends string>(
-	store: Store,
-	metadata: Record<string, any>,
-	name: Name,
-	keys: readonly Key[],
-): Promise<Record<Key, zarr.ZarrArray>> {
-	let nodes = keys.map(async (key) => {
-		let path = `${name}/${key}`;
-		let meta = metadata[path + "/.zarray"];
-		let arr = new zarr.ZarrArray({
-			store,
-			path,
-			shape: meta.shape,
-			dtype: meta.dtype,
-			chunk_shape: meta.chunks,
-			chunk_key: chunkKey(path, meta.dimension_separator ?? "."),
-			compressor: await getCodec(meta.compressor),
-			fill_value: meta.fill_value,
-			attrs: metadata[path + "/.zattrs"] ?? {},
-		});
-		return [key, arr];
-	});
-	return Object.fromEntries(await Promise.all(nodes));
-}
-
-async function openConsolidated(store: Store, path = ""): Promise<CoolerData> {
-	let buf = await store.get(path + "/.zmetadata");
-	let { metadata } = JSON.parse(new TextDecoder().decode(buf));
-	let entries = ([
-		["bins", ["chrom", "end", "start", "weight"]],
-		["chroms", ["name", "length"]],
-		["indexes", ["bin1_offset", "chrom_offset"]],
-		["pixels", ["bin1_id", "bin2_id", "count"]],
-	] as const).map(async ([name, keys]) => [name, await loadGroup(store, metadata, name, keys)]);
-	return {
-		...Object.fromEntries(await Promise.all(entries)),
-		info: metadata[".zattrs"],
-	};
-}
-
-interface CoolerInfo {
-	format: string;
-	"format-version": number;
-	"bin-type": "fixed" | "variable";
-	"bin-size": number;
-	"storage-mode": "symmetric-upper" | "square";
-	nbins: number;
-	chroms: number;
-	nnz: number;
-	assembly: string | null;
-	"generated-by"?: string;
-	"creation-date"?: string;
-	metadata?: string;
-}
-
-class RangeIndexer<
-	Group extends keyof CoolerData,
-	Cols extends keyof CoolerData[Group],
+class Indexer1D<
+	Group extends keyof CoolerDataset,
+	Cols extends keyof CoolerDataset[Group],
 > {
 	constructor(
-		public data: CoolerData,
+		public data: CoolerDataset,
 		public grp: Group,
 		public cols: readonly Cols[],
 	) {}
 
-	select(...cols: Cols[]) {
-		return new RangeIndexer(this.data, this.grp, cols);
+	select<Selection extends Cols>(...cols: Selection[]) {
+		return new Indexer1D(this.data, this.grp, cols);
 	}
 
-	async slice(..._: any[]) {
-		let s = zarr.slice.apply(null, arguments);
+	async slice(
+		start: number,
+		end: number | null,
+		step?: number,
+	): Promise<SliceData<Group, Cols>>;
+	async slice(end: number | null): Promise<SliceData<Group, Cols>>;
+	async slice(
+		start: number | null,
+		end?: number | null,
+		step?: number | null,
+	): Promise<SliceData<Group, Cols>> {
+		let s = slice(start, end, step);
 		let entries = this.cols.map(async (name) => {
 			let a = await this.data[this.grp][name];
-			let { data } = await get(a, [s]);
+			let { data } = await get(a as any, [s]) as any;
 			return [name, data];
 		});
 		return Promise.all(entries).then(Object.fromEntries);
 	}
 
-	fetch(query: string): any;
-	fetch(chrom: string, start: number, end: number): any;
-	fetch(_query: string, _start?: number, _end?: number) {
+	fetch(query: string): Promise<SliceData<Group, Cols>>;
+	fetch(
+		chrom: string,
+		start: number,
+		end: number,
+	): Promise<SliceData<Group, Cols>>;
+	fetch(
+		_query: string,
+		_start?: number,
+		_end?: number,
+	): Promise<SliceData<Group, Cols>> {
 		console.log("Not implemented.");
 		return this.slice(50);
 	}
 }
 
-export class Cooler {
+export class Cooler<Store extends AsyncStore> {
 	constructor(
-		public data: CoolerData,
+		public readonly info: CoolerInfo,
+		public readonly dataset: CoolerDataset<Store>,
 	) {}
 
-	get info() {
-		return this.data.info;
-	}
-
 	get bins() {
-		return new RangeIndexer(this.data, "bins", ["chrom", "start", "end", "weight"]);
+		return new Indexer1D(this.dataset, "bins", [
+			"chrom",
+			"start",
+			"end",
+			"weight",
+		]);
 	}
 
 	get pixels() {
-		return new RangeIndexer(this.data, "pixels", ["bin1_id", "bin2_id", "count"]);
+		return new Indexer1D(this.dataset, "pixels", [
+			"bin1_id",
+			"bin2_id",
+			"count",
+		]);
 	}
 
 	chroms() {
-		return Promise.all([
-			get(this.data.chroms.name, null),
-			get(this.data.chroms.length, null),
-		]);
+		return new Indexer1D(this.dataset, "chroms", ["name", "length"]).slice(
+			null,
+		);
 	}
 
 	// https://cooler.readthedocs.io/en/latest/api.html#cooler-class
@@ -183,22 +103,60 @@ export class Cooler {
 	offset() {/* TODO */}
 	matrix() {/* TODO */}
 
-	static async fromZarr(store: Store) {
-		let data = await openConsolidated(store);
-		return new Cooler(data);
+	static async fromZarr<Store extends AsyncStore>(store: Store) {
+		// TODO: check?
+		let cmeta = await getJson(store, ".zmetadata").catch((_) => undefined);
+		if (cmeta) {
+			store = withConsolidatedMetadata(store, cmeta.metadata);
+		}
+
+		let paths = [
+			"bins/chrom",
+			"bins/start",
+			"bins/end",
+			"bins/weight",
+			"chroms/name",
+			"chroms/length",
+			"indexes/bin1_offset",
+			"indexes/chrom_offset",
+			"pixels/bin1_id",
+			"pixels/bin2_id",
+			"pixels/count",
+		] as const;
+
+		let h = get_hierarchy(store);
+		let [info, arrays] = await Promise.all([
+			h.get_group("/").then((grp) => grp.attrs),
+			Promise.all(paths.map((p) => h.get_array(p))),
+		]);
+		let data: CoolerDataset = arrays.reduce((data: any, arr, i) => {
+			let [grp, col] = paths[i].split("/") as ParsedPath<
+				typeof paths[typeof i]
+			>;
+			if (!data[grp]) data[grp] = {};
+			data[grp][col] = arr;
+			return data;
+		}, {});
+
+		return new Cooler(info as CoolerInfo, data);
 	}
 }
 
 async function run(store: any, name: string) {
 	let c = await Cooler.fromZarr(store);
 	console.time(name);
-	await c.pixels
-		.select("count", "bin2_id", "bin1_id")
-		.slice(30)
-		.then(console.log);
 
-	c.chroms().then(console.log);
+	let pixels = await c.pixels
+		.select("count")
+		.slice(30);
+
+	let chroms = await c.chroms().then(({ name, length }) => ({
+		name: Array.from(name),
+		length: Array.from(length),
+	}));
+
 	console.timeEnd(name);
+	console.log({ pixels, chroms });
 }
 
 export async function main() {
@@ -210,7 +168,13 @@ export async function main() {
 		run(store, "File");
 	});
 
-	let href = "http://localhost:8080/test.10000.zarr.zip";
-	let store = await ZipFileStore.fromUrl(href);
-	run(store, "HTTP");
+	await run(
+		await ZipFileStore.fromUrl("@data/test.10000.zarr.zip"),
+		"HTTP-zip",
+	);
+
+	await run(
+		new FetchStore("@data/test.10000.zarr"),
+		"HTTP",
+	);
 }

@@ -8,3 +8,4 @@ dist-ssr
 *.zarr
 *.zarr.zip
 *.mcool
+data
