@@ -1,6 +1,4 @@
-import { HTTPRangeReader, unzip, ZipEntry } from "unzipit";
 import { registry } from "zarrita";
-import ReadOnlyStore from "zarrita/storage/readonly";
 import type { AsyncStore } from "zarrita/types";
 
 export { slice, ZarrArray } from "zarrita";
@@ -20,39 +18,6 @@ registry.set("gzip", unwrap(() => import("numcodecs/gzip")));
 registry.set("zlib", unwrap(() => import("numcodecs/zlib")));
 registry.set("zstd", unwrap(() => import("numcodecs/zstd")));
 registry.set("lz4", unwrap(() => import("numcodecs/lz4")));
-
-function removePrefix<Key extends string>(
-	key: Key,
-): Key extends `/${infer Rest}` ? Rest : Key {
-	return key[0] === "/" ? key.slice(1) : key as any;
-}
-
-export class ZipFileStore extends ReadOnlyStore {
-	constructor(public refs: Record<string, ZipEntry>) {
-		super();
-	}
-
-	async get(key: string) {
-		let entry = this.refs[removePrefix(key)];
-		if (!entry) return;
-		return new Uint8Array(await entry.arrayBuffer());
-	}
-
-	async has(key: string) {
-		return removePrefix(key) in this.refs;
-	}
-
-	static async fromUrl(href: string) {
-		let reader = new HTTPRangeReader(href);
-		let { entries } = await unzip(reader as any);
-		return new ZipFileStore(entries);
-	}
-
-	static async fromBlob(blob: Blob) {
-		let { entries } = await unzip(blob);
-		return new ZipFileStore(entries);
-	}
-}
 
 type ConsolidatedMetadata = {
 	metadata: Record<string, Record<string, any>>;

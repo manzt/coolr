@@ -6,12 +6,12 @@ specifiers:
   typescript: ^4.5.2
   unzipit: ^1.3.6
   vite: ^2.6.4
-  zarrita: file:../zarrita.js/zarrita-0.2.0-beta.0.tgz
+  zarrita: ^0.2.0-alpha.0
 
 dependencies:
   numcodecs: 0.2.2
   unzipit: 1.3.6
-  zarrita: file:../zarrita.js/zarrita-0.2.0-beta.0.tgz
+  zarrita: 0.2.0-alpha.0
 
 devDependencies:
   serve-static: 1.14.1
@@ -456,10 +456,8 @@ packages:
       fsevents: 2.3.2
     dev: true
 
-  file:../zarrita.js/zarrita-0.2.0-beta.0.tgz:
-    resolution: {integrity: sha512-RIh+VL46m47bcKnlSJkYeN4DfS66mBu518hb9KpW4XIfV0/Qbg2PaCNYd215bWF6Bzp/MyK9UzXUJTyJ5Cf7xA==, tarball: file:../zarrita.js/zarrita-0.2.0-beta.0.tgz}
-    name: zarrita
-    version: 0.2.0-beta.0
+  /zarrita/0.2.0-alpha.0:
+    resolution: {integrity: sha512-fQyOglCj78ABd8MHYrcWKjdnqvT8aGmJgrisYmoDkGWdhvQkznGcKz7Vl6g3X0XgAAwKeR63PKLezRmHBeejug==}
     dependencies:
       '@types/ndarray': 1.0.11
       ndarray: 1.0.19

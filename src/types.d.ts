@@ -60,7 +60,6 @@ export type SliceData<
 	Group extends keyof CoolerDataset,
 	Cols extends keyof CoolerDataset[Group],
 > = {
-	[Key in Cols]: CoolerDataset[Group][Key] extends ZarrArray<infer D, any>
-		? TypedArray<D>
+	[Key in Cols]: CoolerDataset[Group][Key] extends ZarrArray<infer D, any> ? TypedArray<D>
 		: never;
 };

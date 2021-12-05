@@ -1,11 +1,5 @@
-import {
-	consolidated,
-	FetchStore,
-	get,
-	get_hierarchy,
-	slice,
-	ZipFileStore,
-} from "./zarr";
+import { consolidated, FetchStore, get, get_hierarchy, slice } from "./zarr";
+import { ZipFileStore } from "./zip";
 import type { AsyncStore } from "zarrita/types";
 import type { CoolerDataset, CoolerInfo, SliceData } from "./types";
 
@@ -36,8 +30,8 @@ class Indexer1D<
 	): Promise<SliceData<Group, Cols>> {
 		let s = slice(start, end, step);
 		let entries = this.cols.map(async (name) => {
-			let a = await this.data[this.grp][name];
-			let { data } = await get(a as any, [s]) as any;
+			let arr = this.data[this.grp][name];
+			let { data } = await get(arr as any, [s]) as any;
 			return [name, data];
 		});
 		return Promise.all(entries).then(Object.fromEntries);
@@ -66,26 +60,15 @@ export class Cooler<Store extends AsyncStore> {
 	) {}
 
 	get bins() {
-		return new Indexer1D(this.dataset, "bins", [
-			"chrom",
-			"start",
-			"end",
-			"weight",
-		]);
+		return new Indexer1D(this.dataset, "bins", ["chrom", "start", "end", "weight"]);
 	}
 
 	get pixels() {
-		return new Indexer1D(this.dataset, "pixels", [
-			"bin1_id",
-			"bin2_id",
-			"count",
-		]);
+		return new Indexer1D(this.dataset, "pixels", ["bin1_id", "bin2_id", "count"]);
 	}
 
 	chroms() {
-		return new Indexer1D(this.dataset, "chroms", ["name", "length"]).slice(
-			null,
-		);
+		return new Indexer1D(this.dataset, "chroms", ["name", "length"]).slice(null);
 	}
 
 	// https://cooler.readthedocs.io/en/latest/api.html#cooler-class
@@ -137,18 +120,18 @@ export class Cooler<Store extends AsyncStore> {
 				if (!data[grp]) data[grp] = {};
 				data[grp][col] = arr;
 				return data;
-			}, {}),
+			}, {}) as CoolerDataset<Store>,
 		);
 	}
 }
 
-async function run(store: any, name: string) {
+async function run<Store extends AsyncStore>(store: Store, name: string) {
 	let c = await Cooler.fromZarr(store);
 	console.time(name);
 
 	let pixels = await c.pixels
 		.select("count")
-		.slice(30);
+		.slice(null);
 
 	let chroms = await c.chroms().then(({ name, length }) => ({
 		name: Array.from(name),
@@ -157,6 +140,7 @@ async function run(store: any, name: string) {
 
 	console.timeEnd(name);
 	console.log({ pixels, chroms });
+	return c;
 }
 
 export async function main() {
@@ -164,16 +148,16 @@ export async function main() {
 
 	input.addEventListener("change", async (e: any) => {
 		let [file] = e.target.files;
-		let store = await ZipFileStore.fromBlob(file);
+		let store = ZipFileStore.fromBlob(file);
 		run(store, "File");
 	});
 
-	await run(
-		await ZipFileStore.fromUrl("@data/test.10000.zarr.zip"),
+	let c = await run(
+		ZipFileStore.fromUrl("@data/test.10000.zarr.zip"),
 		"HTTP-zip",
 	);
 
-	await run(
+	let c2 = await run(
 		new FetchStore("@data/test.10000.zarr"),
 		"HTTP",
 	);
