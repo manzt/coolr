@@ -144,6 +144,8 @@ async function run<Store extends AsyncStore>(store: Store, name: string) {
 }
 
 export async function main() {
+	// configured only for dev in vite.config.js
+	let base = new URL("http://localhost:3000/@data/");
 	let input = document.querySelector("input[type=file]")!;
 
 	input.addEventListener("change", async (e: any) => {
@@ -153,12 +155,12 @@ export async function main() {
 	});
 
 	let c = await run(
-		ZipFileStore.fromUrl("@data/test.10000.zarr.zip"),
+		ZipFileStore.fromUrl(new URL("test.10000.zarr.zip", base).href),
 		"HTTP-zip",
 	);
 
 	let c2 = await run(
-		new FetchStore("@data/test.10000.zarr"),
+		new FetchStore(new URL("test.10000.zarr", base).href),
 		"HTTP",
 	);
 }

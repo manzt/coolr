@@ -5,7 +5,6 @@ dist
 dist-ssr
 *.local
 
-*.zarr
-*.zarr.zip
-*.mcool
-data
+data/*.zarr
+data/*.zarr.zip
+data/*.mcool
