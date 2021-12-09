@@ -2,21 +2,23 @@ lockfileVersion: 5.3
 
 specifiers:
   numcodecs: ^0.2.2
+  reference-spec-reader: ^0.1.3
   serve-static: ^1.14.1
   typescript: ^4.5.2
   unzipit: ^1.3.6
-  vite: ^2.6.4
+  vite: ^2.7.1
   zarrita: ^0.2.0-alpha.0
 
 dependencies:
   numcodecs: 0.2.2
+  reference-spec-reader: 0.1.3
   unzipit: 1.3.6
   zarrita: 0.2.0-alpha.0
 
 devDependencies:
   serve-static: 1.14.1
   typescript: 4.5.2
-  vite: 2.6.14
+  vite: 2.7.1
 
 packages:
 
@@ -348,6 +350,10 @@ packages:
     engines: {node: '>= 0.6'}
     dev: true
 
+  /reference-spec-reader/0.1.3:
+    resolution: {integrity: sha512-TakIzIgSuer/X8a9UGFN2LnO5+hmAjMdwhbBIpeeBhU/Uc47qP5SCskG1Yj2g/FMkFCBX2UHfrhzlpdCrMEP+g==}
+    dev: false
+
   /resolve/1.20.0:
     resolution: {integrity: sha512-wENBPt4ySzg4ybFQW2TT1zMQucPK95HSh/nq2CFTZVOGut2+pQvSsgtda4d26YrYcr067wjbmzOG8byDPBX63A==}
     dependencies:
@@ -432,8 +438,8 @@ packages:
     resolution: {integrity: sha512-AMqwWZaknLM77G+VPYNZLEruMGWGzyigPK3/Whg99B3S6vGHuqsyl5ZrOv1UUF3paGK1U6PM0cnayioaryg/fA==}
     dev: false
 
-  /vite/2.6.14:
-    resolution: {integrity: sha512-2HA9xGyi+EhY2MXo0+A2dRsqsAG3eFNEVIo12olkWhOmc8LfiM+eMdrXf+Ruje9gdXgvSqjLI9freec1RUM5EA==}
+  /vite/2.7.1:
+    resolution: {integrity: sha512-TDXXhcu5lyQ6uosK4ZWaOyB4VzOiizk0biitRzDzaEtgSUi8rVYPc4k1xgOjLSf0OuceDJmojFKXHOX9DB1WuQ==}
     engines: {node: '>=12.2.0'}
     hasBin: true
     peerDependencies:

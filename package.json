@@ -9,10 +9,11 @@
   "devDependencies": {
     "serve-static": "^1.14.1",
     "typescript": "^4.5.2",
-    "vite": "^2.6.4"
+    "vite": "^2.7.1"
   },
   "dependencies": {
     "numcodecs": "^0.2.2",
+    "reference-spec-reader": "^0.1.3",
     "unzipit": "^1.3.6",
     "zarrita": "^0.2.0-alpha.0"
   }
