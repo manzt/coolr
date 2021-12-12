@@ -1,7 +1,12 @@
-import { consolidated, get, get_hierarchy, slice } from "./zarr";
-import { FetchStore, ReferenceStore, ZipFileStore } from "./storage";
+import * as zarr from "zarrita/v2";
+import { get } from "zarrita/ndarray";
+import { consolidated } from "./util";
 
-import type { AbsolutePath, Async, Readable } from "zarrita";
+import FetchStore from "zarrita/storage/fetch";
+import ReferenceStore from "zarrita/storage/ref";
+import ZipFileStore from "zarrita/storage/zip";
+
+import type { Async, Readable } from "zarrita";
 import type { CoolerDataset, CoolerInfo, SliceData } from "./types";
 
 class Indexer1D<
@@ -31,10 +36,10 @@ class Indexer1D<
 		stop?: number | null,
 		step: number | null = null,
 	): Promise<SliceData<Group, Cols>> {
-		let s = slice(start as any, stop as any, step);
+		let s = zarr.slice(start as any, stop as any, step);
 		let entries = this.cols.map(async (name) => {
 			let arr = this.data[this.grp][name];
-			let { data } = await get(arr as any, [s]) as any;
+			let { data } = await get(arr as any, [s]);
 			return [name, data];
 		});
 		return Promise.all(entries).then(Object.fromEntries);
@@ -90,12 +95,11 @@ export class Cooler<Store extends Async<Readable>> {
 
 	static async fromZarr<Store extends Async<Readable>>(
 		store: Store,
-		path: AbsolutePath = "/",
+		path: `/${string}` = "/",
 	) {
-		path = path.endsWith("/") ? path : `${path}/` as const;
-
 		// https://zarr.readthedocs.io/en/stable/_modules/zarr/convenience.html#consolidate_metadata
-		let bytes = await store.get(`${path}.zmetadata`);
+		let meta_key = `${path.endsWith("/") ? path : `${path}/` as const}.zmetadata` as const;
+		let bytes = await store.get(meta_key);
 		if (bytes) {
 			let str = new TextDecoder().decode(bytes);
 			store = consolidated(store, JSON.parse(str));
@@ -115,11 +119,10 @@ export class Cooler<Store extends Async<Readable>> {
 			"pixels/count",
 		] as const;
 
-		let h = get_hierarchy(store);
-		let grp = await h.get_group(path);
+		let grp = await zarr.get_group(store, path);
 		let [info, ...arrays] = await Promise.all([
-			grp.attrs,
-			...paths.map((p) => grp.get_array(p)),
+			grp.attrs(),
+			...paths.map((p) => zarr.get_array(grp, p)),
 		]);
 		return new Cooler(
 			info as CoolerInfo,
@@ -136,7 +139,7 @@ export class Cooler<Store extends Async<Readable>> {
 async function run<Store extends Async<Readable>>(
 	store: Store,
 	name: string,
-	path?: AbsolutePath,
+	path?: `/${string}`,
 ) {
 	let c = await Cooler.fromZarr(store, path);
 	console.time(name);
@@ -166,19 +169,14 @@ export async function main() {
 		run(store, "File");
 	});
 
-	let c = await run(
-		ZipFileStore.fromUrl(new URL("test.10000.zarr.zip", base).href),
-		"HTTP-zip",
-	);
+	// let c = await run( ZipFileStore.fromUrl(new URL("test.10000.zarr.zip", base).href), "HTTP-zip",);
+	// let c1 = await run( new FetchStore(new URL("test.10000.zarr", base).href), "HTTP",);
 
-	let c1 = await run(
-		new FetchStore(new URL("test.10000.zarr", base).href),
-		"HTTP",
-	);
-
-	// let c1 = await run(
-	// 	await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base)),
-	// 	"hdf5",
-	// 	"/resolutions/10000",
-	// );
+	let store =await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base));
+	//( "hdf5", "/resolutions/10000",)
+	await run (
+		await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base)),
+		"hdf5", 
+		"/resolutions/10000",
+	)
 }
