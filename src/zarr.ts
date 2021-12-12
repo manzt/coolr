@@ -1,10 +1,11 @@
 import { registry } from "zarrita";
-import type { AsyncStore } from "zarrita/types";
+import type { AbsolutePath, Async, Readable } from "zarrita";
 
 export { slice, ZarrArray } from "zarrita";
 export { get_hierarchy } from "zarrita/v2";
 export { get } from "zarrita/ndarray";
-export { default as FetchStore } from "zarrita/storage/fetch";
+
+import { stripPrefix } from "./storage";
 
 type Importer = Parameters<typeof registry["set"]>[1];
 
@@ -27,15 +28,17 @@ type ConsolidatedMetadata = {
 /**
  * Proxies requests to the underlying store.
  */
-export function consolidated<Store extends AsyncStore>(
+export function consolidated<
+	Store extends Async<Readable>,
+>(
 	store: Store,
 	{ metadata }: ConsolidatedMetadata,
 ) {
 	let encoder = new TextEncoder();
 	let get = (target: Store, prop: string) => {
 		if (prop === "get") {
-			return (key: string) => {
-				let prefix = key[0] === "/" ? key.slice(1) : key;
+			return (key: AbsolutePath) => {
+				let prefix = stripPrefix(key);
 				if (prefix in metadata) {
 					let str = JSON.stringify(metadata[prefix]);
 					return Promise.resolve(encoder.encode(str));
@@ -43,15 +46,6 @@ export function consolidated<Store extends AsyncStore>(
 				return target.get(key);
 			};
 		}
-
-		if (prop === "has") {
-			return (key: string) => {
-				let prefix = key[0] === "/" ? key.slice(1) : key;
-				if (prefix in metadata) return Promise.resolve(true);
-				return target.has(key);
-			};
-		}
-
 		return Reflect.get(target, prop);
 	};
 

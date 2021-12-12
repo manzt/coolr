@@ -1,32 +1,35 @@
 import type { Reader, ZipInfo } from "unzipit";
 import { unzip } from "unzipit";
 import { parse } from "reference-spec-reader";
-import ReadOnlyStore from "zarrita/storage/readonly";
+import type { AbsolutePath, Async, Readable } from "zarrita";
 export { default as FetchStore } from "zarrita/storage/fetch";
 
 function getRangeHeader(offset: number, size: number) {
 	return {
 		Range: `bytes=${offset}-${offset + size - 1}`,
-	}
+	};
 }
 
 function uri2href(url: string | URL) {
-	let [protocol, rest] = (typeof url === 'string' ? url : url.href).split('://');
-	if (protocol === 'https' || protocol === 'http') {
+	let [protocol, rest] = (typeof url === "string" ? url : url.href).split("://");
+	if (protocol === "https" || protocol === "http") {
 		return url;
 	}
-	if (protocol === 'gc') {
+	if (protocol === "gc") {
 		return `https://storage.googleapis.com/${rest}`;
 	}
-	if (protocol === 's3') {
+	if (protocol === "s3") {
 		return `https://s3.amazonaws.com/${rest}`;
 	}
-	throw Error('Protocol not supported, got: ' + JSON.stringify(protocol));
+	throw Error("Protocol not supported, got: " + JSON.stringify(protocol));
 }
 
-type FetchConfig = { url: string | URL, offset?: number, size?: number };
+type FetchConfig = { url: string | URL; offset?: number; size?: number };
 
-function fetchWithOptionalRange({ url, offset, size }: FetchConfig, opts: RequestInit = {}) {
+function fetchWithOptionalRange(
+	{ url, offset, size }: FetchConfig,
+	opts: RequestInit = {},
+) {
 	if (offset !== undefined && size !== undefined) {
 		// merge request opts
 		opts = {
@@ -34,8 +37,8 @@ function fetchWithOptionalRange({ url, offset, size }: FetchConfig, opts: Reques
 			headers: {
 				...opts.headers,
 				...getRangeHeader(offset, size),
-			}
-		}
+			},
+		};
 	}
 	return fetch(url as string, opts);
 }
@@ -85,27 +88,26 @@ class HTTPRangeReader<Url extends string | URL> implements Reader {
 	}
 }
 
-function removePrefix<Key extends string>(
-	key: Key,
-): Key extends `/${infer Rest}` ? Rest : Key {
-	return key[0] === "/" ? key.slice(1) : key as any;
+export function stripPrefix<Path extends AbsolutePath>(
+	path: Path,
+): Path extends AbsolutePath<infer Rest> ? Rest : never {
+	return path.slice(1) as any;
 }
 
-export class ZipFileStore<R extends Reader> extends ReadOnlyStore {
+export class ZipFileStore<R extends Reader> implements Async<Readable> {
 	private info: Promise<ZipInfo>;
 	constructor(reader: R) {
-		super();
 		this.info = unzip(reader);
 	}
 
-	async get(key: string) {
-		let entry = (await this.info).entries[removePrefix(key)];
+	async get(key: AbsolutePath) {
+		let entry = (await this.info).entries[stripPrefix(key)];
 		if (!entry) return;
 		return new Uint8Array(await entry.arrayBuffer());
 	}
 
-	async has(key: string) {
-		return removePrefix(key) in (await this.info).entries;
+	async has(key: AbsolutePath) {
+		return stripPrefix(key) in (await this.info).entries;
 	}
 
 	static fromUrl<Url extends string | URL>(href: Url) {
@@ -117,29 +119,25 @@ export class ZipFileStore<R extends Reader> extends ReadOnlyStore {
 	}
 }
 
-
-let stripPrefix = (str: string) => str[0] === '/' ? str.slice(1) : str;
-
 interface ReferenceStoreOptions {
 	target?: string | URL;
 }
 
-export class ReferenceStore extends ReadOnlyStore {
+export class ReferenceStore implements Async<Readable<RequestInit>> {
 	private target?: string | URL;
 
 	constructor(private refs: ReturnType<typeof parse>, opts: ReferenceStoreOptions = {}) {
-		super();
 		this.target = opts.target;
 	}
 
-	async get(key: string, opts: RequestInit = {}) {
+	async get(key: AbsolutePath, opts: RequestInit = {}) {
 		let ref = this.refs.get(stripPrefix(key));
 
 		if (!ref) return;
 
-		if (typeof ref === 'string') {
+		if (typeof ref === "string") {
 			let enc = new TextEncoder();
-			let ascii = ref.startsWith('base64:') ? atob(ref.slice(7)) : ref;
+			let ascii = ref.startsWith("base64:") ? atob(ref.slice(7)) : ref;
 			return enc.encode(ascii);
 		}
 
@@ -152,13 +150,15 @@ export class ReferenceStore extends ReadOnlyStore {
 		let res = await fetchWithOptionalRange({ url: uri2href(url), offset, size }, opts);
 
 		if (res.status === 200 || res.status === 206) {
-			return res.arrayBuffer();
+			return new Uint8Array(await res.arrayBuffer());
 		}
 
-		throw new Error(`Request unsuccessful for key ${key}. Response status: ${res.status}.`);
+		throw new Error(
+			`Request unsuccessful for key ${key}. Response status: ${res.status}.`,
+		);
 	}
 
-	async has(key: string) {
+	async has(key: AbsolutePath) {
 		return this.refs.has(stripPrefix(key));
 	}
 
@@ -168,7 +168,7 @@ export class ReferenceStore extends ReadOnlyStore {
 	}
 
 	static async fromUrl(refUrl: string | URL, opts: ReferenceStoreOptions = {}) {
-		let spec = await fetch(refUrl as string).then(res => res.json());
+		let spec = await fetch(refUrl as string).then((res) => res.json());
 		return ReferenceStore.fromSpec(spec, opts);
 	}
 }
