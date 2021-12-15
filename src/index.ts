@@ -1,6 +1,6 @@
 import * as zarr from "zarrita/v2";
 import { get } from "zarrita/ndarray";
-import { consolidated } from "./util";
+import { consolidated, Shuffle } from "./util";
 
 import FetchStore from "zarrita/storage/fetch";
 import ReferenceStore from "zarrita/storage/ref";
@@ -8,6 +8,9 @@ import ZipFileStore from "zarrita/storage/zip";
 
 import type { Async, Readable } from "zarrita";
 import type { CoolerDataset, CoolerInfo, SliceData } from "./types";
+
+// add shuffle codec to registry
+zarr.registry.set(Shuffle.codecId, () => Shuffle as any);
 
 class Indexer1D<
 	Group extends keyof CoolerDataset,
@@ -98,7 +101,9 @@ export class Cooler<Store extends Async<Readable>> {
 		path: `/${string}` = "/",
 	) {
 		// https://zarr.readthedocs.io/en/stable/_modules/zarr/convenience.html#consolidate_metadata
-		let meta_key = `${path.endsWith("/") ? path : `${path}/` as const}.zmetadata` as const;
+		let meta_key = `${
+			path.endsWith("/") ? path : `${path}/` as const
+		}.zmetadata` as const;
 		let bytes = await store.get(meta_key);
 		if (bytes) {
 			let str = new TextDecoder().decode(bytes);
@@ -169,14 +174,20 @@ export async function main() {
 		run(store, "File");
 	});
 
-	// let c = await run( ZipFileStore.fromUrl(new URL("test.10000.zarr.zip", base).href), "HTTP-zip",);
-	// let c1 = await run( new FetchStore(new URL("test.10000.zarr", base).href), "HTTP",);
+	let c = await run(
+		ZipFileStore.fromUrl(new URL("test.10000.zarr.zip", base).href),
+		"HTTP-zip",
+	);
 
-	let store =await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base));
-	//( "hdf5", "/resolutions/10000",)
-	await run (
-		await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base)),
-		"hdf5", 
-		"/resolutions/10000",
-	)
+	let c1 = await run(
+		new FetchStore(new URL("test.10000.zarr", base).href),
+		"HTTP",
+	);
+
+	let store = await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base));
+	let c2 = await run(
+		store,
+		"hdf5",
+		"/resolutions/1000000",
+	);
 }

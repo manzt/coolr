@@ -7,13 +7,13 @@ specifiers:
   typescript: ^4.5.2
   unzipit: ^1.3.6
   vite: ^2.7.1
-  zarrita: ^0.2.0-beta.0
+  zarrita: ^0.2.0-beta.1
 
 dependencies:
   numcodecs: 0.2.2
   reference-spec-reader: 0.1.3
   unzipit: 1.3.6
-  zarrita: 0.2.0-beta.0
+  zarrita: 0.2.0-beta.1
 
 devDependencies:
   serve-static: 1.14.1
@@ -462,8 +462,8 @@ packages:
       fsevents: 2.3.2
     dev: true
 
-  /zarrita/0.2.0-beta.0:
-    resolution: {integrity: sha512-alTabrGMby2EgywkQJAZ6TV83LXDl1BLLYSB6Uz+gShcHHVWGTWcprZSJN4ysG+wIQFqeMLlljO2Dw6VQMQtmw==}
+  /zarrita/0.2.0-beta.1:
+    resolution: {integrity: sha512-jeCISP8appzNRPP7aifHqLnAyVNTY4zuRGxHGM2wafDtv/cR1sJVdFHKlB0NC45iXvCGCUF/Uc15nTmABiXqmQ==}
     dependencies:
       '@types/ndarray': 1.0.11
       ndarray: 1.0.19
