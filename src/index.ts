@@ -1,102 +1,148 @@
 import * as zarr from "zarrita/v2";
 import { get } from "zarrita/ndarray";
-import { consolidated, Shuffle } from "./util";
-
-import FetchStore from "zarrita/storage/fetch";
-import ReferenceStore from "zarrita/storage/ref";
-import ZipFileStore from "zarrita/storage/zip";
+import {
+	consolidated,
+	parseRegion,
+	regionKey,
+	regionToExtent,
+	Shuffle,
+	zip,
+} from "./util";
 
 import type { Async, Readable } from "zarrita";
-import type { CoolerDataset, CoolerInfo, SliceData } from "./types";
+import type {
+	CoolerDataset,
+	CoolerInfo,
+	Dataset,
+	DataSlice,
+	Extent,
+	Region,
+} from "./types";
 
 // add shuffle codec to registry
 zarr.registry.set(Shuffle.codecId, () => Shuffle as any);
 
-class Indexer1D<
-	Group extends keyof CoolerDataset,
-	Cols extends keyof CoolerDataset[Group],
-> {
+export class Indexer1D<Source extends Dataset<any, any>, Fields extends keyof Source> {
 	constructor(
-		public data: CoolerDataset,
-		public grp: Group,
-		public cols: readonly Cols[],
+		public source: Source,
+		public fields: Fields[],
+		private fetcher?: (region: string | Region) => Promise<Extent>,
 	) {}
 
-	select<Selection extends Cols>(...cols: Selection[]) {
-		return new Indexer1D(this.data, this.grp, cols);
+	select<F extends typeof this.fields[number]>(...fields: F[]) {
+		return new Indexer1D(this.source, fields, this.fetcher);
 	}
 
 	// Reuse overloads from zarrita's slice fn
-	async slice(end: number | null): Promise<SliceData<Group, Cols>>;
-	async slice(start: number, end: number | null): Promise<SliceData<Group, Cols>>;
+	async slice(end: number | null): Promise<DataSlice<Source, Fields>>;
+	async slice(start: number, end: number | null): Promise<DataSlice<Source, Fields>>;
 	async slice(
 		start: number,
 		end: number | null,
 		step: number | null,
-	): Promise<SliceData<Group, Cols>>;
+	): Promise<DataSlice<Source, Fields>>;
 	async slice(
 		start: number | null,
 		stop?: number | null,
 		step: number | null = null,
-	): Promise<SliceData<Group, Cols>> {
+	): Promise<DataSlice<Source, Fields>> {
 		let s = zarr.slice(start as any, stop as any, step);
-		let entries = this.cols.map(async (name) => {
-			let arr = this.data[this.grp][name];
-			let { data } = await get(arr as any, [s]);
+		let entries = this.fields.map(async (name) => {
+			let arr = this.source[name];
+			let { data } = await get(arr, [s]);
 			return [name, data];
 		});
 		return Promise.all(entries).then(Object.fromEntries);
 	}
 
-	fetch(query: string): Promise<SliceData<Group, Cols>>;
-	fetch(
-		chrom: string,
-		start: number,
-		end: number,
-	): Promise<SliceData<Group, Cols>>;
-	fetch(
-		_query: string,
-		_start?: number,
-		_end?: number,
-	): Promise<SliceData<Group, Cols>> {
-		console.log("Not implemented.");
-		return this.slice(50);
+	async fetch(region: string | Region) {
+		if (!this.fetcher) throw new Error("No fetcher provided for indexer.");
+		let [start, end] = await this.fetcher(region);
+		return this.slice(start, end);
 	}
 }
-
 export class Cooler<Store extends Async<Readable>> {
+	#chroms?: Record<string, number>;
+	#extentCache: Record<string, Extent> = {};
+
 	constructor(
 		public readonly info: CoolerInfo,
 		public readonly dataset: CoolerDataset<Store>,
 	) {}
 
+	get binsize() {
+		return this.info["bin-size"];
+	}
+
 	get bins() {
-		return new Indexer1D(this.dataset, "bins", ["chrom", "start", "end", "weight"]);
+		return new Indexer1D(
+			this.dataset.bins,
+			["chrom", "start", "end", "weight"],
+			(region) => this.extent(region),
+		);
 	}
 
 	get pixels() {
-		return new Indexer1D(this.dataset, "pixels", ["bin1_id", "bin2_id", "count"]);
+		return new Indexer1D(
+			this.dataset.pixels,
+			["bin1_id", "bin2_id", "count"],
+			async (region) => {
+				let [i0, i1] = await this.extent(region);
+				let indexer = this.indexes.select("bin1_offset");
+				let fetchAndParse = async (idx: number) => {
+					let { bin1_offset: [v] } = await indexer.slice(idx, idx + 1);
+					return Number(v);
+				};
+				return Promise.all([
+					fetchAndParse(i0),
+					fetchAndParse(i1),
+				]);
+			},
+		);
 	}
 
-	chroms() {
-		return new Indexer1D(this.dataset, "chroms", ["name", "length"]).slice(null);
+	get indexes() {
+		return new Indexer1D(this.dataset.indexes, ["chrom_offset", "bin1_offset"]);
+	}
+
+	get shape() {
+		return [this.info.nbins, this.info.nbins] as const;
+	}
+
+	async chroms() {
+		if (this.#chroms) return this.#chroms;
+		let indexer = new Indexer1D(this.dataset.chroms, ["name", "length"]);
+		let { name, length } = await indexer.slice(null);
+		return (this.#chroms = Object.fromEntries(
+			zip(Array.from(name), Array.from(length)),
+		));
 	}
 
 	// https://cooler.readthedocs.io/en/latest/api.html#cooler-class
-	get chromnames() {
-		/* TODO */ return undefined;
+	chromnames() {
+		return this.chroms().then(Object.keys);
 	}
-	get chromsizes() {
-		/* TODO */ return undefined;
+
+	chromsizes() {
+		return this.chroms().then(Object.values);
 	}
-	get binsize() {
-		/* TODO */ return undefined;
+
+	async offset(region: string | Region): Promise<number> {
+		return this.extent(region).then(([offset]) => offset);
 	}
-	extent() {/* TODO */}
-	offset() {/* TODO */}
+
+	async extent(region: string | Region): Promise<Extent> {
+		let normed = parseRegion(region, await this.chroms());
+		let key = regionKey(normed);
+		if (key in this.#extentCache) {
+			return this.#extentCache[key];
+		}
+		return (this.#extentCache[key] = await regionToExtent(this, normed));
+	}
+
 	matrix() {/* TODO */}
 
-	static async fromZarr<Store extends Async<Readable>>(
+	static async open<Store extends Async<Readable>>(
 		store: Store,
 		path: `/${string}` = "/",
 	) {
@@ -129,15 +175,19 @@ export class Cooler<Store extends Async<Readable>> {
 			grp.attrs(),
 			...paths.map((p) => zarr.get_array(grp, p)),
 		]);
-		return new Cooler(
-			info as CoolerInfo,
-			arrays.reduce((data: any, arr, i) => {
-				let [grp, col] = paths[i].split("/");
-				if (!data[grp]) data[grp] = {};
-				data[grp][col] = arr;
-				return data;
-			}, {}) as CoolerDataset<Store>,
-		);
+		if (info["creation-date"]) {
+			info["creation-date"] = new Date(info["creation-date"]);
+		}
+		if (info["metadata"]) {
+			info["metadata"] = JSON.parse(info["metadata"]);
+		}
+		let dset = arrays.reduce((data: any, arr, i) => {
+			let [grp, col] = paths[i].split("/");
+			if (!data[grp]) data[grp] = {};
+			data[grp][col] = arr;
+			return data;
+		}, {}) as CoolerDataset<Store>;
+		return new Cooler(info as CoolerInfo, dset);
 	}
 }
 
@@ -146,17 +196,15 @@ async function run<Store extends Async<Readable>>(
 	name: string,
 	path?: `/${string}`,
 ) {
-	let c = await Cooler.fromZarr(store, path);
+	let c = await Cooler.open(store, path);
 	console.time(name);
 
 	let pixels = await c.pixels
 		.select("count")
 		.slice(10);
 
-	let chroms = await c.chroms().then(({ name, length }) => ({
-		name: Array.from(name),
-		length: Array.from(length),
-	}));
+	let chroms = await c.chroms();
+	console.log(chroms);
 
 	console.timeEnd(name);
 	console.log({ pixels, chroms });
@@ -164,6 +212,16 @@ async function run<Store extends Async<Readable>>(
 }
 
 export async function main() {
+	let [
+		{ default: _FetchStore },
+		{ default: ReferenceStore },
+		{ default: ZipFileStore },
+	] = await Promise.all([
+		import("zarrita/storage/fetch"),
+		import("zarrita/storage/ref"),
+		import("zarrita/storage/zip"),
+	]);
+
 	// configured only for dev in vite.config.js
 	let base = new URL("http://localhost:3000/@data/");
 	let input = document.querySelector("input[type=file]")!;
@@ -174,20 +232,22 @@ export async function main() {
 		run(store, "File");
 	});
 
+	// let c = await run(ZipFileStore.fromUrl(new URL("test.10000.zarr.zip", base).href), "HTTP-zip");
+	// let c1 = await run(new FetchStore(new URL("test.10000.zarr", base).href), "HTTP");
+
 	let c = await run(
-		ZipFileStore.fromUrl(new URL("test.10000.zarr.zip", base).href),
-		"HTTP-zip",
-	);
-
-	let c1 = await run(
-		new FetchStore(new URL("test.10000.zarr", base).href),
-		"HTTP",
-	);
-
-	let store = await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base));
-	let c2 = await run(
-		store,
+		await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base)),
 		"hdf5",
-		"/resolutions/1000000",
+		"/resolutions/10000",
 	);
+
+	console.time("first");
+	console.log(await c.extent("chr17:82,200,000-83,200,000"));
+	console.timeEnd("first");
+
+	console.time("second");
+	console.log(await c.extent("chr17:82,200,000-83,200,000"));
+	console.timeEnd("second");
+
+	console.log(c);
 }
