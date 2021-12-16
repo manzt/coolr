@@ -1,6 +1,13 @@
 ## coolr
 
+**Here be dragons** 🐉
+
+### Development
+
+This library uses the [`pnpm`](https://pnpm.io/) package manager. Follow the instructions 
+in `./data/README.md` to download the demo datasets and then run the following.
+
 ```
-npm install
-npm run dev # open localhost 3000
+pnpm install
+pnpm run dev # open localhost 3000
 ```
