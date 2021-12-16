@@ -22,10 +22,10 @@ import type {
 // add shuffle codec to registry
 zarr.registry.set(Shuffle.codecId, () => Shuffle as any);
 
-export class Indexer1D<Source extends Dataset<any, any>, Fields extends keyof Source> {
+export class Indexer1D<Source extends Dataset<any, any>, Field extends keyof Source> {
 	constructor(
 		public source: Source,
-		public fields: Fields[],
+		public fields: Field[],
 		private fetcher?: (region: string | Region) => Promise<Extent>,
 	) {}
 
@@ -34,25 +34,26 @@ export class Indexer1D<Source extends Dataset<any, any>, Fields extends keyof So
 	}
 
 	// Reuse overloads from zarrita's slice fn
-	async slice(end: number | null): Promise<DataSlice<Source, Fields>>;
-	async slice(start: number, end: number | null): Promise<DataSlice<Source, Fields>>;
+	async slice(end: number | null): Promise<DataSlice<Source, Field>>;
+	async slice(start: number, end: number | null): Promise<DataSlice<Source, Field>>;
 	async slice(
 		start: number,
 		end: number | null,
 		step: number | null,
-	): Promise<DataSlice<Source, Fields>>;
+	): Promise<DataSlice<Source, Field>>;
 	async slice(
 		start: number | null,
 		stop?: number | null,
 		step: number | null = null,
-	): Promise<DataSlice<Source, Fields>> {
+	): Promise<DataSlice<Source, Field>> {
 		let s = zarr.slice(start as any, stop as any, step);
 		let entries = this.fields.map(async (name) => {
 			let arr = this.source[name];
 			let { data } = await get(arr, [s]);
 			return [name, data];
 		});
-		return Promise.all(entries).then(Object.fromEntries);
+		let obj = await Promise.all(entries).then(Object.fromEntries);
+		return this.fields.length === 1 ? obj[this.fields[0]] : obj;
 	}
 
 	async fetch(region: string | Region) {
@@ -61,7 +62,7 @@ export class Indexer1D<Source extends Dataset<any, any>, Fields extends keyof So
 		return this.slice(start, end);
 	}
 }
-export class Cooler<Store extends Async<Readable>> {
+export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 	#chroms?: Record<string, number>;
 	#extentCache: Record<string, Extent> = {};
 
@@ -199,9 +200,7 @@ async function run<Store extends Async<Readable>>(
 	let c = await Cooler.open(store, path);
 	console.time(name);
 
-	let pixels = await c.pixels
-		.select("count")
-		.slice(10);
+	let pixels = await c.pixels.select("count").slice(10);
 
 	let chroms = await c.chroms();
 	console.log(chroms);

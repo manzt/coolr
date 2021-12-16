@@ -1,9 +1,6 @@
-import { slice } from "zarrita/v2";
-import { get } from "zarrita/ndarray";
-
 import type { AbsolutePath, Async, Readable } from "zarrita";
 import type { Codec } from "numcodecs";
-import type { Dataset, DataSlice, Extent, NormedRegion, Region } from "./types";
+import type { Extent, NormedRegion, Region } from "./types";
 import type { Cooler } from "./index";
 
 export function zip<A, B>(a: A[], b: B[]): [A, B][] {
@@ -20,9 +17,7 @@ type ConsolidatedMetadata = {
 };
 
 /** Proxies requests to the underlying store. */
-export function consolidated<
-	Store extends Async<Readable>,
->(
+export function consolidated<Store extends Async<Readable>>(
 	store: Store,
 	{ metadata }: ConsolidatedMetadata,
 ) {
@@ -105,7 +100,7 @@ export function parseRegion(
 	let [chr, start, end] = typeof region === "string" ? parseRegionStr(region) : region;
 	let clen = chromsizes[chr];
 	if (!clen) {
-		throw new Error(`Unknown seequence label: ${chr}.`);
+		throw new Error(`Unknown sequence label: ${chr}.`);
 	}
 	let numStart = start ?? 0;
 	let numEnd = end ?? clen;
@@ -131,17 +126,17 @@ export async function regionToExtent(
 	let indexer = cooler.indexes.select("chrom_offset");
 
 	if (binsize) {
-		let { chrom_offset: [offset] } = await indexer.slice(cid, cid + 1);
+		let [offset] = await indexer.slice(cid, cid + 1);
 		return [
 			Number(offset) + Math.floor(start / binsize),
 			Number(offset) + Math.ceil(end / binsize),
 		];
 	}
-	let { chrom_offset: [bigintLo, bigintHi] } = await indexer.slice(cid, cid + 2);
+	let [bigintLo, bigintHi] = await indexer.slice(cid, cid + 2);
 	let chromLo = Number(bigintLo);
 	let chromHi = Number(bigintHi);
 
-	let { start: chromBins } = await cooler
+	let chromBins = await cooler
 		.bins
 		.select("start")
 		.slice(chromLo, chromHi);

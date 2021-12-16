@@ -46,10 +46,19 @@ export type CoolerDataset<Store extends Async<Readable> = Async<Readable>> = {
 	}>;
 };
 
-export type DataSlice<T extends Dataset<any, any>, K extends keyof T> = {
+type Table<T extends Dataset<any, any>, K extends keyof T> = {
 	[Key in K]: T[Key] extends ZarrArray<infer D, any> ? TypedArray<D> : never;
 };
+
+export type DataSlice<T extends Dataset<any, any>, K extends keyof T> = IsUnion<K> extends
+	true ? Table<T, K>
+	: Table<T, K>[K]; // extract TypedArray if only one key
 
 export type Region = [chrom: string, start: number | null, end: number | null];
 export type NormedRegion = [chrom: string, start: number, end: number];
 export type Extent = [number, number];
+
+type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends
+	((k: infer I) => void) ? I : never;
+
+type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
