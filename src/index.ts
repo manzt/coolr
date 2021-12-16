@@ -1,23 +1,11 @@
 import * as zarr from "zarrita/v2";
 import { get } from "zarrita/ndarray";
-import {
-	consolidated,
-	parseRegion,
-	regionKey,
-	regionToExtent,
-	Shuffle,
-	zip,
-} from "./util";
+// deno-fmt-ignore
+import { consolidated, parseRegion, regionKey, regionToExtent, Shuffle, zip } from "./util";
 
 import type { Async, Readable } from "zarrita";
-import type {
-	CoolerDataset,
-	CoolerInfo,
-	Dataset,
-	DataSlice,
-	Extent,
-	Region,
-} from "./types";
+// deno-fmt-ignore
+import type { CoolerDataset, CoolerInfo, Dataset, DataSlice, Extent, Region } from "./types";
 
 // add shuffle codec to registry
 zarr.registry.set(Shuffle.codecId, () => Shuffle as any);
@@ -29,7 +17,7 @@ export class Indexer1D<Source extends Dataset<any, any>, Field extends keyof Sou
 		private fetcher?: (region: string | Region) => Promise<Extent>,
 	) {}
 
-	select<F extends typeof this.fields[number]>(...fields: F[]) {
+	select<F extends Field>(...fields: F[]) {
 		return new Indexer1D(this.source, fields, this.fetcher);
 	}
 
@@ -91,7 +79,7 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 				let [i0, i1] = await this.extent(region);
 				let indexer = this.indexes.select("bin1_offset");
 				let fetchAndParse = async (idx: number) => {
-					let { bin1_offset: [v] } = await indexer.slice(idx, idx + 1);
+					let [v] = await indexer.slice(idx, idx + 1);
 					return Number(v);
 				};
 				return Promise.all([
@@ -190,63 +178,4 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 		}, {}) as CoolerDataset<Store>;
 		return new Cooler(info as CoolerInfo, dset);
 	}
-}
-
-async function run<Store extends Async<Readable>>(
-	store: Store,
-	name: string,
-	path?: `/${string}`,
-) {
-	let c = await Cooler.open(store, path);
-	console.time(name);
-
-	let pixels = await c.pixels.select("count").slice(10);
-
-	let chroms = await c.chroms();
-	console.log(chroms);
-
-	console.timeEnd(name);
-	console.log({ pixels, chroms });
-	return c;
-}
-
-export async function main() {
-	let [
-		{ default: _FetchStore },
-		{ default: ReferenceStore },
-		{ default: ZipFileStore },
-	] = await Promise.all([
-		import("zarrita/storage/fetch"),
-		import("zarrita/storage/ref"),
-		import("zarrita/storage/zip"),
-	]);
-
-	// configured only for dev in vite.config.js
-	let base = new URL("http://localhost:3000/@data/");
-	let input = document.querySelector("input[type=file]")!;
-
-	input.addEventListener("change", async (e: any) => {
-		let [file] = e.target.files;
-		let store = ZipFileStore.fromBlob(file);
-		run(store, "File");
-	});
-
-	// let c = await run(ZipFileStore.fromUrl(new URL("test.10000.zarr.zip", base).href), "HTTP-zip");
-	// let c1 = await run(new FetchStore(new URL("test.10000.zarr", base).href), "HTTP");
-
-	let c = await run(
-		await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base)),
-		"hdf5",
-		"/resolutions/10000",
-	);
-
-	console.time("first");
-	console.log(await c.extent("chr17:82,200,000-83,200,000"));
-	console.timeEnd("first");
-
-	console.time("second");
-	console.log(await c.extent("chr17:82,200,000-83,200,000"));
-	console.timeEnd("second");
-
-	console.log(c);
 }

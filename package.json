@@ -3,14 +3,24 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "prepack": "mkdist --declaration",
     "check": "tsc",
-    "serve": "vite preview",
     "fmt": "deno fmt --options-use-tabs --options-line-width 90 src"
   },
+  "files": [
+    "dist/"
+  ],
+  "typings": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "devDependencies": {
+    "mkdist": "0.3.5",
     "serve-static": "^1.14.1",
-    "typescript": "^4.5.2",
+    "typescript": "^4.5.4",
     "vite": "^2.7.1"
   },
   "dependencies": {

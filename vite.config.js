@@ -9,7 +9,11 @@ const resolveDataDir = (fp) => {
 	return path.resolve(__dirname, fp);
 };
 
-/** @returns {import('vite').Plugin} */
+/**
+ * Static file server. Adds `@data/` route during development.
+ *
+ * @returns {import('vite').Plugin} 
+ */
 const serveData = (dir) => {
 	dir = resolveDataDir(dir);
 	const serve = serveStatic(dir, { dotfiles: "allow" });
@@ -29,4 +33,11 @@ const serveData = (dir) => {
 	};
 };
 
-export default defineConfig({ plugins: [serveData("./data")] });
+export default defineConfig({ 
+	resolve: {
+		alias: { "@manzt/coolr": "./src/index.ts" },
+	},
+	plugins: [
+		serveData("./data"),
+	] 
+});

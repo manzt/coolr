@@ -12,7 +12,10 @@
 		"noEmit": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
-		"noImplicitReturns": true
+		"noImplicitReturns": true,
+		"paths": {
+			"@manzt/coolr": ["./src/index.ts"]
+		}
 	},
-	"include": ["./src"]
+	"include": ["./demo.ts", "./src"]
 }
