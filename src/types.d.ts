@@ -3,15 +3,14 @@ import type { Array as ZarrArray } from "zarrita/v2";
 import type { ByteStr, Float64, Int32, Int64 } from "zarrita/dtypes";
 
 export interface CoolerInfo {
+	// Required attributes
 	"format": string;
 	"format-version": number;
 	"bin-type": "fixed" | "variable";
-	"bin-size": number;
+	"bin-size": number | null;
 	"storage-mode": "symmetric-upper" | "square";
-	"nbins": number;
-	"chroms": number;
-	"nnz": number;
-	"assembly": string | null;
+	// Reserved but optional fields
+	"assembly"?: string;
 	"generated-by"?: string;
 	"creation-date"?: Date;
 	"metadata"?: Record<string, any>;
@@ -42,7 +41,7 @@ export type CoolerDataset<Store extends Async<Readable> = Async<Readable>> = {
 	pixels: Dataset<Store, {
 		bin1_id: Int64;
 		bin2_id: Int64;
-		count: Int32;
+		count: Int32 | Float64;
 	}>;
 };
 

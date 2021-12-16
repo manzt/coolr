@@ -1,104 +1,102 @@
-import type { Cooler } from "./index";
-import type { Int32, Int64, TypedArray } from "zarrita/dtypes";
+import type { Indexer1D } from "./index";
+import type { CoolerDataset } from "./types";
 
-class CSRReader<Field extends Cooler["pixels"]["fields"][number]> {
+import { searchSorted } from "./util";
+
+function linspace(start: number, stop: number, num: number, endpoint?: boolean) {
+	const div = endpoint ? (num - 1) : num;
+	const step = (stop - start) / div;
+	return Array.from({ length: num }, (_, i) => start + step * i);
+}
+
+function unique(arr: number[]): number[] {
+	return [...new Set(arr)];
+}
+
+/**
+ *  Take a monotonic sequence of integers and downsample it such that they
+ *  are at least ``step`` apart (roughly), preserving the first and last
+ *  elements. Returns indices, not values.
+ */
+function argPrunePartition(arr: number[], step: number) {
+	let lo = arr[0];
+	let hi = arr[arr.length - 1];
+	let num = Math.floor(2 + (hi - lo) / step);
+	let cuts = linspace(lo, hi, num);
+	return unique(Array.from(cuts, (v) => searchSorted(arr, v)));
+}
+
+type BBox = [i0: number, i1: number, j0: number, j1: number];
+
+class CSRReader {
 	constructor(
-		public pixels: Cooler["pixels"],
-		public indexes: Cooler["indexes"],
-		public field: Field,
-		public maxChunk: bigint,
-	) {}
+		public pixels: Indexer1D<CoolerDataset["pixels"], "count" | "bin1_id" | "bin2_id">,
+		public bin1Offsets: number[],
+	) {
+	}
 
-	/** Retrieve pixel table row IDs corresponding to query rectangle. */
-	async indexCol(i0: number, i1: number, j0: number, j1: number) {
-		let edges = await this.#edges(i0, i1);
-		let index: number[] = [];
-		for (let i = 0; i < edges.length - 1; i++) {
-			let lo1 = edges[i];
-			let hi1 = edges[i + 1];
-			if (hi1 - lo1 > 0n) {
-				let bin2 = await this.#bin2(Number(lo1), Number(hi1));
-				let nlo1 = Number(lo1);
-				let bj0 = BigInt(j0);
-				let bj1 = BigInt(j1);
-				for (let i = 0; i < bin2.length; i++) {
-					if (bin2[i] >= bj0 && bin2[i] < bj1) {
-						index.push(i + nlo1);
-					}
-				}
-			}
+	async getSpans([i0, i1, j0, j1]: BBox, chunksize: number) {
+		let edges: number[];
+		if ((i1 - i0 < 1) || (j1 - j0 < 1)) {
+			edges = [];
+		} else {
+			edges = argPrunePartition(
+				this.bin1Offsets.slice(i0, i1 + 1),
+				chunksize,
+			);
 		}
-		return index;
+		return Array.from({ length: edges.length - 1 }, (_, i) => {
+			return [edges[i], edges[i + 1]] as const;
+		});
 	}
 
-	#edges(i0: number, i1: number) {
-		return this.indexes
-			.select("bin1_offset")
-			.slice(i0, i1 + 1);
-	}
+	async read(
+		field: "count",
+		[i0, i1, j0, j1]: BBox,
+		opts: {
+			rowSpan?: [number, number];
+			reflect?: boolean;
+			returnIndex?: boolean;
+		} = {},
+	) {
+		let [s0, s1] = opts.rowSpan ?? [i0, i1];
+		let result = {
+			bin1_id: [] as number[],
+			bin2_id: [] as number[],
+			[field]: [] as number[],
+		};
 
-	#bin2(lo: number, hi: number) {
-		return this.pixels
-			.select("bin2_id")
-			.slice(lo, hi);
-	}
+		let offsets = this.bin1Offsets.slice(s0, s1 + 1);
+		let offsetLo = offsets[0];
+		let offsetHi = offsets[offsets.length - 1];
 
-	#data(lo: number, hi: number) {
-		return this.pixels
-			.select(this.field)
-			.slice(lo, hi) as Promise<TypedArray<Int32 | Int64>>;
-	}
+		let {
+			bin2_id: bin2Extracted,
+			[field]: dataExtracted,
+		} = await this.pixels
+			.select("bin2_id", field)
+			.slice(offsetLo, offsetHi);
 
-	/** Retrieve sparse matrix data inside a query rectangle. */
-	async query(i0: number, i1: number, j0: number, j1: number) {
-		let i: number[] = [];
-		let j: number[] = [];
-		let v: number[] = [];
+		// Now, go row by row, filter out unwanted columns, and accumulate the results.
+		for (let i = 0; i < (offsets.length - 1); i++) {
+			// Shift the global offsets to relative ones.
+			let lo = offsets[i] - offsetLo;
+			let hi = offsets[i + 1] - offsetLo;
 
-		if ((i1 - i0 > 0) || (j1 - j0 > 0)) {
-			let edges = await this.#edges(i0, i1);
-			let p0 = edges[0];
-			let p1 = edges[edges.length - 1];
+			// Get the j coordinates for this row and filter for the range of j values we want.
+			let bin2 = Array.from(bin2Extracted.subarray(lo, hi), Number);
+			let data = dataExtracted.subarray(lo, hi);
 
-			if ((p1 - p0) < BigInt(this.maxChunk)) {
-				let allBin2 = await this.#bin2(Number(p0), Number(p1));
-				let allData = await this.#data(Number(p0), Number(p1));
-
-				for (let _i = 0; _i < edges.length - 1; _i++) {
-					let rowId = i0 + _i;
-					let lo = Number(edges[_i] - p0);
-					let hi = Number(edges[_i + 1] - p0);
-					let bin2 = allBin2.subarray(lo, hi);
-					let data = allData.subarray(lo, hi);
-
-					for (let _j = 0; _j < bin2.length; _j++) {
-						if (bin2[_j] >= BigInt(j0) && bin2[_j] < BigInt(j1)) {
-							i.push(rowId);
-							j.push(Number(bin2[_j]));
-							v.push(Number(data[_j]));
-						}
-					}
-				}
-			} else {
-				for (let _i = 0; _i < edges.length - 1; _i++) {
-					let rowId = i0 + _i;
-					let lo = Number(edges[_i] - p0);
-					let hi = Number(edges[_i + 1] - p0);
-
-					let [bin2, data] = await Promise.all([this.#bin2(lo, hi), this.#data(lo, hi)]);
-
-					for (let _j = 0; _j < bin2.length; _j++) {
-						if (bin2[_j] >= BigInt(j0) && bin2[_j] < BigInt(j1)) {
-							i.push(rowId);
-							j.push(Number(bin2[_j]));
-							v.push(Number(data[_j]));
-						}
-					}
+			for (let j = 0; j < bin2.length; j++) {
+				if ((bin2[j] >= j0) && (bin2[j] < j1)) {
+					result.bin1_id.push(i + s0); // row
+					result.bin2_id.push(bin2[j]); // col
+					result[field].push(data[j]); // field
 				}
 			}
 		}
 
-		return { i, j, v };
+		return result;
 	}
 }
 

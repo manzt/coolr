@@ -1,7 +1,7 @@
 import * as zarr from "zarrita/v2";
 import { get } from "zarrita/ndarray";
 // deno-fmt-ignore
-import { consolidated, parseRegion, regionKey, regionToExtent, Shuffle, zip } from "./util";
+import { consolidated, parseRegion, regionKey, regionToExtent, Shuffle, zip, parseInfo } from "./util";
 
 import type { Async, Readable } from "zarrita";
 // deno-fmt-ignore
@@ -60,7 +60,7 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 	) {}
 
 	get binsize() {
-		return this.info["bin-size"];
+		return this.info["bin-size"] ?? undefined;
 	}
 
 	get bins() {
@@ -95,7 +95,8 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 	}
 
 	get shape() {
-		return [this.info.nbins, this.info.nbins] as const;
+		let nbins = this.dataset.bins.end.shape[0];
+		return [nbins, nbins] as const;
 	}
 
 	async chroms() {
@@ -126,7 +127,7 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 		if (key in this.#extentCache) {
 			return this.#extentCache[key];
 		}
-		return (this.#extentCache[key] = await regionToExtent(this, normed));
+		return (this.#extentCache[key] = await regionToExtent(this, normed, this.binsize));
 	}
 
 	matrix() {/* TODO */}
@@ -160,22 +161,20 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 		] as const;
 
 		let grp = await zarr.get_group(store, path);
+
 		let [info, ...arrays] = await Promise.all([
-			grp.attrs(),
+			grp.attrs().then(parseInfo),
 			...paths.map((p) => zarr.get_array(grp, p)),
 		]);
-		if (info["creation-date"]) {
-			info["creation-date"] = new Date(info["creation-date"]);
-		}
-		if (info["metadata"]) {
-			info["metadata"] = JSON.parse(info["metadata"]);
-		}
-		let dset = arrays.reduce((data: any, arr, i) => {
-			let [grp, col] = paths[i].split("/");
-			if (!data[grp]) data[grp] = {};
-			data[grp][col] = arr;
-			return data;
-		}, {}) as CoolerDataset<Store>;
-		return new Cooler(info as CoolerInfo, dset);
+
+		return new Cooler(
+			info,
+			arrays.reduce((data, arr, i) => {
+				let [grp, col] = paths[i].split("/");
+				if (!data[grp]) data[grp] = {};
+				data[grp][col] = arr;
+				return data;
+			}, {} as any) as CoolerDataset<Store>,
+		);
 	}
 }

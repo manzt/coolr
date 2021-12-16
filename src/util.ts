@@ -1,6 +1,6 @@
 import type { AbsolutePath, Async, Readable } from "zarrita";
 import type { Codec } from "numcodecs";
-import type { Extent, NormedRegion, Region } from "./types";
+import type { CoolerInfo, Extent, NormedRegion, Region } from "./types";
 import type { Cooler } from "./index";
 
 export function zip<A, B>(a: A[], b: B[]): [A, B][] {
@@ -164,7 +164,7 @@ function findInsert(arr: ArrayLike<number>, value: number) {
 	return end + 1;
 }
 
-function searchSorted(
+export function searchSorted(
 	arr: ArrayLike<number>,
 	value: number,
 	side: "left" | "right" = "left",
@@ -176,4 +176,18 @@ function searchSorted(
 		while (arr[idx] === value) idx++;
 	}
 	return idx;
+}
+
+export function parseInfo(raw: Record<string, any>): CoolerInfo {
+	let info = { ...raw };
+	if (info["creation-date"]) {
+		info["creation-date"] = new Date(info["creation-date"]);
+	}
+	if (info["metadata"]) {
+		info["metadata"] = JSON.parse(info["metadata"]);
+	}
+	if (info["bin-size"] === "null") {
+		info["bin-size"] === null;
+	}
+	return info as CoolerInfo;
 }
