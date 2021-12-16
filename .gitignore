@@ -8,4 +8,3 @@ dist-ssr
 data/*.zarr
 data/*.zarr.zip
 data/*.mcool
-data/*.json
