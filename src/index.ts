@@ -6,6 +6,7 @@ import { consolidated, parseRegion, regionKey, regionToExtent, Shuffle, zip, par
 import type { Async, Readable } from "zarrita";
 // deno-fmt-ignore
 import type { CoolerDataset, CoolerInfo, Dataset, DataSlice, Extent, Region } from "./types";
+import CSRReader from "./CSRReader";
 
 // add shuffle codec to registry
 zarr.registry.set(Shuffle.codecId, () => Shuffle as any);
@@ -51,7 +52,8 @@ export class Indexer1D<Source extends Dataset<any, any>, Field extends keyof Sou
 	}
 }
 export class Cooler<Store extends Async<Readable> = Async<Readable>> {
-	#chroms?: Record<string, number>;
+	#cachedChroms?: Record<string, number>;
+	#cachedBin1Offsets?: Promise<number[]>;
 	#extentCache: Record<string, Extent> = {};
 
 	constructor(
@@ -67,8 +69,12 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 		return new Indexer1D(
 			this.dataset.bins,
 			["chrom", "start", "end", "weight"],
-			(region) => this.extent(region),
+			this.extent,
 		);
+	}
+
+	get indexes() {
+		return new Indexer1D(this.dataset.indexes, ["bin1_offset", "chrom_offset"]);
 	}
 
 	get pixels() {
@@ -76,22 +82,21 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 			this.dataset.pixels,
 			["bin1_id", "bin2_id", "count"],
 			async (region) => {
-				let [i0, i1] = await this.extent(region);
-				let indexer = this.indexes.select("bin1_offset");
-				let fetchAndParse = async (idx: number) => {
-					let [v] = await indexer.slice(idx, idx + 1);
-					return Number(v);
-				};
-				return Promise.all([
-					fetchAndParse(i0),
-					fetchAndParse(i1),
+				let [[i0, i1], offsets] = await Promise.all([
+					this.extent(region),
+					this.#bin1Offsets,
 				]);
+				return [offsets[i0], offsets[i1]];
 			},
 		);
 	}
 
-	get indexes() {
-		return new Indexer1D(this.dataset.indexes, ["chrom_offset", "bin1_offset"]);
+	get #bin1Offsets() {
+		if (this.#cachedBin1Offsets) return this.#cachedBin1Offsets;
+		return (this.#cachedBin1Offsets = this.indexes
+			.select("bin1_offset")
+			.slice(null)
+			.then((b) => Array.from(b, Number)));
 	}
 
 	get shape() {
@@ -100,15 +105,14 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 	}
 
 	async chroms() {
-		if (this.#chroms) return this.#chroms;
+		if (this.#cachedChroms) return this.#cachedChroms;
 		let indexer = new Indexer1D(this.dataset.chroms, ["name", "length"]);
 		let { name, length } = await indexer.slice(null);
-		return (this.#chroms = Object.fromEntries(
-			zip(Array.from(name), Array.from(length)),
+		return (this.#cachedChroms = Object.fromEntries(
+			zip(Array.from(name), length),
 		));
 	}
 
-	// https://cooler.readthedocs.io/en/latest/api.html#cooler-class
 	chromnames() {
 		return this.chroms().then(Object.keys);
 	}
@@ -130,51 +134,51 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 		return (this.#extentCache[key] = await regionToExtent(this, normed, this.binsize));
 	}
 
-	matrix() {/* TODO */}
-
-	static async open<Store extends Async<Readable>>(
-		store: Store,
-		path: `/${string}` = "/",
-	) {
-		// https://zarr.readthedocs.io/en/stable/_modules/zarr/convenience.html#consolidate_metadata
-		let meta_key = `${
-			path.endsWith("/") ? path : `${path}/` as const
-		}.zmetadata` as const;
-		let bytes = await store.get(meta_key);
-		if (bytes) {
-			let str = new TextDecoder().decode(bytes);
-			store = consolidated(store, JSON.parse(str));
-		}
-
-		let paths = [
-			"bins/chrom",
-			"bins/start",
-			"bins/end",
-			"bins/weight",
-			"chroms/name",
-			"chroms/length",
-			"indexes/bin1_offset",
-			"indexes/chrom_offset",
-			"pixels/bin1_id",
-			"pixels/bin2_id",
-			"pixels/count",
-		] as const;
-
-		let grp = await zarr.get_group(store, path);
-
-		let [info, ...arrays] = await Promise.all([
-			grp.attrs().then(parseInfo),
-			...paths.map((p) => zarr.get_array(grp, p)),
-		]);
-
-		return new Cooler(
-			info,
-			arrays.reduce((data, arr, i) => {
-				let [grp, col] = paths[i].split("/");
-				if (!data[grp]) data[grp] = {};
-				data[grp][col] = arr;
-				return data;
-			}, {} as any) as CoolerDataset<Store>,
-		);
+	matrix() {
+		return new CSRReader(this.pixels, this.#bin1Offsets);
 	}
+}
+
+export async function open<Store extends Async<Readable>>(
+	store: Store,
+	path: `/${string}` = "/",
+) {
+	// https://zarr.readthedocs.io/en/stable/_modules/zarr/convenience.html#consolidate_metadata
+	let meta_key = `${path.endsWith("/") ? path : `${path}/` as const}.zmetadata` as const;
+	let bytes = await store.get(meta_key);
+	if (bytes) {
+		let str = new TextDecoder().decode(bytes);
+		store = consolidated(store, JSON.parse(str));
+	}
+
+	let paths = [
+		"bins/chrom",
+		"bins/start",
+		"bins/end",
+		"bins/weight",
+		"chroms/name",
+		"chroms/length",
+		"indexes/bin1_offset",
+		"indexes/chrom_offset",
+		"pixels/bin1_id",
+		"pixels/bin2_id",
+		"pixels/count",
+	] as const;
+
+	let grp = await zarr.get_group(store, path);
+
+	let [info, ...arrays] = await Promise.all([
+		grp.attrs().then(parseInfo),
+		...paths.map((p) => zarr.get_array(grp, p)),
+	]);
+
+	return new Cooler(
+		info,
+		arrays.reduce((data, arr, i) => {
+			let [grp, col] = paths[i].split("/");
+			if (!data[grp]) data[grp] = {};
+			data[grp][col] = arr;
+			return data;
+		}, {} as any) as CoolerDataset<Store>,
+	);
 }

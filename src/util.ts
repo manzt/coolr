@@ -3,7 +3,7 @@ import type { Codec } from "numcodecs";
 import type { CoolerInfo, Extent, NormedRegion, Region } from "./types";
 import type { Cooler } from "./index";
 
-export function zip<A, B>(a: A[], b: B[]): [A, B][] {
+export function zip<A, B>(a: A[], b: ArrayLike<B>): [A, B][] {
 	return a.map((x, i) => [x, b[i]]);
 }
 

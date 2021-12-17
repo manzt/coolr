@@ -31,7 +31,7 @@ type BBox = [i0: number, i1: number, j0: number, j1: number];
 class CSRReader {
 	constructor(
 		public pixels: Indexer1D<CoolerDataset["pixels"], "count" | "bin1_id" | "bin2_id">,
-		public bin1Offsets: number[],
+		public bin1Offsets: Promise<number[]>,
 	) {
 	}
 
@@ -40,8 +40,9 @@ class CSRReader {
 		if ((i1 - i0 < 1) || (j1 - j0 < 1)) {
 			edges = [];
 		} else {
+			let offsets = await this.bin1Offsets;
 			edges = argPrunePartition(
-				this.bin1Offsets.slice(i0, i1 + 1),
+				offsets.slice(i0, i1 + 1),
 				chunksize,
 			);
 		}
@@ -66,7 +67,7 @@ class CSRReader {
 			[field]: [] as number[],
 		};
 
-		let offsets = this.bin1Offsets.slice(s0, s1 + 1);
+		let offsets = (await this.bin1Offsets).slice(s0, s1 + 1);
 		let offsetLo = offsets[0];
 		let offsetHi = offsets[offsets.length - 1];
 
