@@ -26,7 +26,7 @@ function argPrunePartition(arr: number[], step: number) {
 	return unique(Array.from(cuts, (v) => searchSorted(arr, v)));
 }
 
-type BBox = [i0: number, i1: number, j0: number, j1: number];
+export type BBox = [i0: number, i1: number, j0: number, j1: number];
 
 class CSRReader {
 	constructor(

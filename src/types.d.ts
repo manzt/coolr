@@ -1,5 +1,5 @@
 import type { Async, DataType, Readable, TypedArray } from "zarrita";
-import type { Array as ZarrArray } from "zarrita/v2";
+import type * as zarr from "zarrita/v2";
 import type { ByteStr, Float64, Int32, Int64 } from "zarrita/dtypes";
 
 export interface CoolerInfo {
@@ -20,7 +20,7 @@ export type Dataset<
 	Store extends Async<Readable>,
 	Nodes extends Record<string, DataType>,
 > = {
-	[Key in keyof Nodes]: ZarrArray<Nodes[Key], Store>;
+	[Key in keyof Nodes]: zarr.Array<Nodes[Key], Store>;
 };
 
 export type CoolerDataset<Store extends Async<Readable> = Async<Readable>> = {
@@ -46,7 +46,7 @@ export type CoolerDataset<Store extends Async<Readable> = Async<Readable>> = {
 };
 
 type Table<T extends Dataset<any, any>, K extends keyof T> = {
-	[Key in K]: T[Key] extends ZarrArray<infer D, any> ? TypedArray<D> : never;
+	[Key in K]: T[Key] extends zarr.Array<infer D, any> ? TypedArray<D> : never;
 };
 
 export type DataSlice<T extends Dataset<any, any>, K extends keyof T> = IsUnion<K> extends
