@@ -48,6 +48,7 @@ function argPrunePartition(arr: number[], step: number) {
 	return unique(Array.from(cuts, (v) => searchSorted(arr, v)));
 }
 
+// @ts-ignore
 function getSpans(bbox: BBox, chunksize: number, bin1Offsets: number[]) {
 	let [i0, i1, j0, j1] = bbox;
 	if ((i1 - i0 < 1) || (j1 - j0 < 1)) {
