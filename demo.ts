@@ -1,22 +1,58 @@
 import * as cooler from "@manzt/coolr";
 
-import _FetchStore from "zarrita/storage/fetch";
-import ReferenceStore from "zarrita/storage/ref";
-import ZipFileStore from "zarrita/storage/zip";
-
-let input = document.querySelector("input[type=file]")!;
-input.addEventListener("change", async (e: Event) => {
-	let file = (e.target as HTMLInputElement).files![0];
-	let c = await cooler.open(ZipFileStore.fromBlob(file));
-	console.log(c);
-});
-
-// configured only for dev in vite.config.js
 let base = new URL("http://localhost:3000/@data/");
-let c = await cooler.open(
-	await ReferenceStore.fromUrl(new URL("test.mcool.remote.json", base)),
-	"/resolutions/1000",
-);
 
-// add to window so can access in browser console
+function scaleFn(max: number, min: number = 0) {
+	let a = 0;
+	let b = 255;
+	return (x: number) => (b - a) * (x - min) / (max - min) + a;
+}
+
+let resolutions = await cooler.mcool(new URL("test.mcool.remote.json", base).href);
+
+// get highest resolution
+let [name, c] = resolutions[0];
+
+console.log(name);
 (window as any).c = c;
+
+// read region as dense array
+let size = 1024;
+let { data, shape: [height, width] } = await c.matrix.slice(0, size, 0, size);
+
+// scale values to 0-255 & create RGBA image
+
+let min = Infinity;
+let max = -Infinity;
+for (let i = 0; i < data.length; i++) {
+	if (data[i] > max) max = data[i];
+	if (data[i] < min) min = data[i];
+}
+
+let scale = scaleFn(max, min);
+let rgba = new Uint8ClampedArray(data.length * 4);
+let offset = 0;
+
+for (let i = 0; i < data.length; i++) {
+	let value = Math.floor(scale(data[i]));
+	if (value >= 0) {
+		rgba[offset + 0] = value;
+		rgba[offset + 1] = 0;
+		rgba[offset + 2] = 0;
+	} else {
+		rgba[offset] = 255;
+		rgba[offset + 1] = 255;
+		rgba[offset + 2] = 255;
+	}
+	rgba[offset + 3] = 255;
+	offset += 4;
+}
+
+let img = new ImageData(rgba, width);
+let canvas = document.querySelector("canvas")!;
+let dpi = devicePixelRatio;
+canvas.width = width * dpi;
+canvas.height = height * dpi;
+canvas.style.width = width + "px";
+var ctx = canvas.getContext("2d")!;
+ctx.putImageData(img, 0, 0);

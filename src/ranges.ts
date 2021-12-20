@@ -72,7 +72,6 @@ export class CSRReader {
 	}
 
 	async *read(field: "count", bbox: BBox): AsyncIterable<COO<number>> {
-		console.log(bbox);
 		let [i0, i1, j0, j1] = bbox;
 		let [s0, s1] = [i0, i1];
 
@@ -156,7 +155,6 @@ class RangeQuery2D {
 
 		let data: number[] = Array(h * w).fill(0);
 		for await (let [i, j, v] of this.coords()) {
-			console.log(v);
 			data[(i - i0) * w + (j - j0)] = v;
 		}
 
