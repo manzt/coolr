@@ -2,47 +2,38 @@ import * as zarr from "zarrita/v2";
 import { get } from "zarrita/ndarray";
 // deno-fmt-ignore
 import { consolidated, parseRegion, regionKey, regionToExtent, Shuffle, zip, parseInfo } from "./util";
+import { BBox, CSRReader, FillLowerRangeQuery2D } from "./ranges";
 
 import type { Async, Readable } from "zarrita";
 // deno-fmt-ignore
 import type { CoolerDataset, CoolerInfo, Dataset, DataSlice, Extent, Region } from "./types";
 export type { CoolerDataset, CoolerInfo };
-import CSRReader from "./CSRReader";
 
 // add shuffle codec to registry
 zarr.registry.set(Shuffle.codecId, () => Shuffle as any);
 
 export class Indexer1D<Source extends Dataset<any, any>, Field extends keyof Source> {
 	constructor(
-		public source: Source,
-		public fields: Field[],
-		private fetcher?: (region: string | Region) => Promise<Extent>,
+		public readonly source: Source,
+		public readonly fields: Field[],
+		private readonly fetcher?: (region: string | Region) => Promise<Extent>,
 	) {}
 
 	select<F extends Field>(...fields: F[]) {
 		return new Indexer1D(this.source, fields, this.fetcher);
 	}
 
-	// Reuse overloads from zarrita's slice fn
 	async slice(end: number | null): Promise<DataSlice<Source, Field>>;
 	async slice(start: number, end: number | null): Promise<DataSlice<Source, Field>>;
-	async slice(
-		start: number,
-		end: number | null,
-		step: number | null,
-	): Promise<DataSlice<Source, Field>>;
-	async slice(
-		start: number | null,
-		stop?: number | null,
-		step: number | null = null,
-	): Promise<DataSlice<Source, Field>> {
-		let s = zarr.slice(start as any, stop as any, step);
-		let entries = this.fields.map(async (name) => {
-			let arr = this.source[name];
-			let { data } = await get(arr, [s]);
-			return [name, data];
-		});
-		let obj = await Promise.all(entries).then(Object.fromEntries);
+	async slice(a: any, b?: any): Promise<DataSlice<Source, Field>> {
+		let entries = await Promise.all(
+			this.fields.map(async (name) => {
+				let arr = this.source[name];
+				let { data } = await get(arr, [zarr.slice(a, b)]);
+				return [name, data];
+			}),
+		);
+		let obj = Object.fromEntries(entries);
 		return this.fields.length === 1 ? obj[this.fields[0]] : obj;
 	}
 
@@ -52,6 +43,50 @@ export class Indexer1D<Source extends Dataset<any, any>, Field extends keyof Sou
 		return this.slice(start, end);
 	}
 }
+
+type Fetcher2D = (region: string | Region, region2?: string | Region) => Promise<BBox>;
+
+export class Matrix {
+	constructor(
+		public readonly cooler: Cooler,
+		public readonly reader: CSRReader,
+		private readonly fetcher: Fetcher2D,
+	) {}
+
+	get shape() {
+		return this.cooler.shape;
+	}
+
+	async slice(i0: number, i1: number, j0: number, j1: number) {
+		const field = "count";
+		const balance = "weight";
+
+		let bbox: BBox = [i0, i1, j0, j1];
+		let engine = new FillLowerRangeQuery2D(this.reader, field, bbox);
+
+		let arr = await engine.array();
+
+		if (balance) {
+			let weights = this.cooler.bins.select(balance);
+			let bias1 = await weights.slice(i0, i1);
+			let bias2 = (i0 === j0 && i1 === j1) ? bias1 : await weights.slice(j0, j1);
+			for (let i = 0; i < (i1 - i0); i++) {
+				for (let j = 0; j < (j1 - j0); j++) {
+					let offset = i * arr.shape[1] + j;
+					arr.data[offset] = arr.data[offset] * bias1[i] * bias2[j];
+				}
+			}
+		}
+
+		return arr;
+	}
+
+	async fetch(region: string | Region, region2?: string | Region) {
+		let [i0, i1, j0, j1] = await this.fetcher(region, region2);
+		return this.slice(i0, i1, j0, j1);
+	}
+}
+
 export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 	#cachedChroms?: Record<string, number>;
 	#cachedBin1Offsets?: Promise<number[]>;
@@ -135,8 +170,15 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 		return (this.#extentCache[key] = await regionToExtent(this, normed, this.binsize));
 	}
 
-	matrix() {
-		return new CSRReader(this.pixels, this.#bin1Offsets);
+	get matrix() {
+		let reader = new CSRReader(this.pixels, this.#bin1Offsets);
+		return new Matrix(this, reader, async (region, region2) => {
+			let [[i0, i1], [j0, j1]] = await Promise.all([
+				this.extent(region),
+				this.extent(region2 ?? region),
+			]);
+			return [i0, i1, j0, j1];
+		});
 	}
 }
 

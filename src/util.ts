@@ -113,6 +113,37 @@ export function parseRegion(
 	return [chr, numStart, numEnd];
 }
 
+// binary search to eagerly find insert
+function findInsert(arr: ArrayLike<number>, value: number) {
+	let start = 0;
+	let end = arr.length - 1;
+	while (start <= end) {
+		let mid = Math.floor((start + end) / 2);
+		if (arr[mid] === value) {
+			return mid;
+		} else if (arr[mid] < value) {
+			start = mid + 1;
+		} else {
+			end = mid - 1;
+		}
+	}
+	return end + 1;
+}
+
+export function searchSorted(
+	arr: ArrayLike<number>,
+	value: number,
+	side: "left" | "right" = "left",
+) {
+	let idx = findInsert(arr, value);
+	if (side === "left") {
+		while (arr[idx - 1] === value) idx--;
+	} else {
+		while (arr[idx] === value) idx++;
+	}
+	return idx;
+}
+
 export async function regionToExtent(
 	cooler: Cooler<any>,
 	region: NormedRegion,
@@ -145,37 +176,6 @@ export async function regionToExtent(
 		chromLo + searchSorted(chromBins, start, "right") - 1,
 		chromLo + searchSorted(chromBins, end, "left"),
 	];
-}
-
-// binary search to eagerly find insert
-function findInsert(arr: ArrayLike<number>, value: number) {
-	let start = 0;
-	let end = arr.length - 1;
-	while (start <= end) {
-		let mid = Math.floor((start + end) / 2);
-		if (arr[mid] === value) {
-			return mid;
-		} else if (arr[mid] < value) {
-			start = mid + 1;
-		} else {
-			end = mid - 1;
-		}
-	}
-	return end + 1;
-}
-
-export function searchSorted(
-	arr: ArrayLike<number>,
-	value: number,
-	side: "left" | "right" = "left",
-) {
-	let idx = findInsert(arr, value);
-	if (side === "left") {
-		while (arr[idx - 1] === value) idx--;
-	} else {
-		while (arr[idx] === value) idx++;
-	}
-	return idx;
 }
 
 export function parseInfo(raw: Record<string, any>): CoolerInfo {

@@ -13,6 +13,7 @@
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noImplicitReturns": true,
+		"noImplicitAny": true,
 		"paths": {
 			"@manzt/coolr": ["./src/index.ts"]
 		}
