@@ -12,12 +12,12 @@ let resolutions = await cooler.mcool(new URL("test.mcool.remote.json", base).hre
 
 // get highest resolution
 let [name, c] = resolutions[0];
+let size = 1024;
 
-console.log(name);
+console.log(`${name}, region: [0:${size}, 0:${size}]`);
 (window as any).c = c;
 
 // read region as dense array
-let size = 1024;
 let { data, shape: [height, width] } = await c.matrix.slice(0, size, 0, size);
 
 // scale values to 0-255 & create RGBA image
