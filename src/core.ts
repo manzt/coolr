@@ -187,8 +187,8 @@ export async function open<Store extends Async<Readable>>(
 	path: `/${string}` = "/",
 ) {
 	// https://zarr.readthedocs.io/en/stable/_modules/zarr/convenience.html#consolidate_metadata
-	let meta_key = `${path.endsWith("/") ? path : `${path}/` as const}.zmetadata` as const;
-	let bytes = await store.get(meta_key);
+	let metaKey = `${path.endsWith("/") ? path : `${path}/` as const}.zmetadata` as const;
+	let bytes = await store.get(metaKey);
 	if (bytes) {
 		let str = new TextDecoder().decode(bytes);
 		store = consolidated(store, JSON.parse(str));
