@@ -6,11 +6,11 @@ specifiers:
   serve-static: ^1.14.1
   typescript: ^4.5.4
   vite: ^2.7.1
-  zarrita: ^0.2.1
+  zarrita: ^0.2.2
 
 dependencies:
   numcodecs: 0.2.2
-  zarrita: 0.2.1
+  zarrita: 0.2.2
 
 devDependencies:
   mkdist: 0.3.5_typescript@4.5.4
@@ -678,8 +678,8 @@ packages:
       fsevents: 2.3.2
     dev: true
 
-  /zarrita/0.2.1:
-    resolution: {integrity: sha512-PtOBuLjJzuOv72kgCOv9Jm1BhPz9mMSEDRYArbz+s2pRK51sglPFWxP+rmhF4trgSLpaBpWqGsTXefEm+lYprw==}
+  /zarrita/0.2.2:
+    resolution: {integrity: sha512-Spu/TnR4rPfY80QC6O8Z4BVqzlakZ11bkmCF29xDgIMq9KXT4H1dWHG4gzkqvse/To+cOFXsr002r79Ch5JbaQ==}
     dependencies:
       '@types/ndarray': 1.0.11
       ndarray: 1.0.19
