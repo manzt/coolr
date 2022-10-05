@@ -1,6 +1,6 @@
 import * as cooler from "@manzt/coolr";
 
-let base = new URL("http://localhost:3000/@data/");
+let base = new URL("/@data/", import.meta.url);
 
 function scaleFn(max: number, min: number = 0) {
 	let a = 0;
