@@ -4,7 +4,7 @@ specifiers:
   mkdist: 0.3.5
   numcodecs: ^0.2.2
   serve-static: ^1.14.1
-  typescript: ^4.5.4
+  typescript: ^4.8.4
   vite: ^3.1.4
   zarrita: ^0.2.2
 
@@ -13,9 +13,9 @@ dependencies:
   zarrita: 0.2.2
 
 devDependencies:
-  mkdist: 0.3.5_typescript@4.5.4
+  mkdist: 0.3.5_typescript@4.8.4
   serve-static: 1.14.1
-  typescript: 4.5.4
+  typescript: 4.8.4
   vite: 3.1.4
 
 packages:
@@ -663,7 +663,7 @@ packages:
     hasBin: true
     dev: true
 
-  /mkdist/0.3.5_typescript@4.5.4:
+  /mkdist/0.3.5_typescript@4.8.4:
     resolution: {integrity: sha512-3ai1qPfTufa/YMdsjYoA372YVogn1yLkHTG7H7tG66xJpYdoK3vnelROhM41dGhHh/4RhObCkDwAQCpIx81A3g==}
     hasBin: true
     peerDependencies:
@@ -679,7 +679,7 @@ packages:
       jiti: 1.12.9
       mri: 1.2.0
       pathe: 0.2.0
-      typescript: 4.5.4
+      typescript: 4.8.4
     dev: true
 
   /mri/1.2.0:
@@ -872,8 +872,8 @@ packages:
     engines: {node: '>=0.6'}
     dev: true
 
-  /typescript/4.5.4:
-    resolution: {integrity: sha512-VgYs2A2QIRuGphtzFV7aQJduJ2gyfTljngLzjpfW9FoYZF6xuw1W0vW9ghCKLfcWrCFxK81CSGRAvS1pn4fIUg==}
+  /typescript/4.8.4:
+    resolution: {integrity: sha512-QCh+85mCy+h0IGff8r5XWzOVSbBO+KfeYrMQh7NJ58QujwcE22u+NUSmUxqF+un70P9GXKxa2HCNiTTMJknyjQ==}
     engines: {node: '>=4.2.0'}
     hasBin: true
     dev: true
