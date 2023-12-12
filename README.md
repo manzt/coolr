@@ -10,5 +10,5 @@ the following.
 
 ```bash
 pnpm install
-pnpm dev # open localhost 3000
+pnpm dev # open localhost
 ```
