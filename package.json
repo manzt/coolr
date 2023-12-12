@@ -6,7 +6,8 @@
 		"dev": "vite",
 		"prepack": "tsc",
 		"check": "tsc --noEmit",
-		"format": "dprint fmt"
+		"format": "dprint fmt",
+		"lint": "dprint check"
 	},
 	"files": [
 		"dist/"
