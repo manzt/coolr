@@ -20,10 +20,9 @@
 	},
 	"devDependencies": {
 		"dprint": "^0.43.2",
-		"mkdist": "0.3.5",
 		"serve-static": "^1.15.0",
-		"typescript": "^5.0.4",
-		"vite": "^4.3.5"
+		"typescript": "^5.3.3",
+		"vite": "^5.0.8"
 	},
 	"dependencies": {
 		"@zarrita/storage": "0.1.0-next.3",
