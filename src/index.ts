@@ -1,9 +1,9 @@
-export { Cooler, Indexer1D, open } from "./core";
+export { Cooler, Indexer1D, open } from "./core.js";
 
-import { open } from "./core";
+import { open } from "./core.js";
 
 export async function mcool(href: string) {
-	let { default: ReferenceStore } = await import("zarrita/storage/ref");
+	let { default: ReferenceStore } = await import("@zarrita/storage");
 	let store = await ReferenceStore.fromUrl(href);
 	// TODO: Make refs public on store?
 	let { refs } = store as any as { refs: Map<string, unknown> };

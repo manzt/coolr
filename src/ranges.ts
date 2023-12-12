@@ -1,8 +1,13 @@
-import { searchSorted } from "./util";
-import type { Indexer1D } from "./index";
-import type { CoolerDataset } from "./types";
+import { searchSorted } from "./util.js";
+import type { Indexer1D } from "./index.js";
+import type { CoolerDataset } from "./types.js";
 
-function linspace(start: number, stop: number, num: number, endpoint?: boolean) {
+function linspace(
+	start: number,
+	stop: number,
+	num: number,
+	endpoint?: boolean,
+) {
 	const div = endpoint ? (num - 1) : num;
 	const step = (stop - start) / div;
 	return Array.from({ length: num }, (_, i) => start + step * i);
@@ -48,7 +53,6 @@ function argPrunePartition(arr: number[], step: number) {
 	return unique(Array.from(cuts, (v) => searchSorted(arr, v)));
 }
 
-// @ts-ignore
 function getSpans(bbox: BBox, chunksize: number, bin1Offsets: number[]) {
 	let [i0, i1, j0, j1] = bbox;
 	if ((i1 - i0 < 1) || (j1 - j0 < 1)) {
@@ -61,12 +65,18 @@ function getSpans(bbox: BBox, chunksize: number, bin1Offsets: number[]) {
 }
 
 export type BBox = [i0: number, i1: number, j0: number, j1: number];
-export type Fetcher = (field: "count", bbox: BBox) => AsyncIterable<COO<number>>;
+export type Fetcher = (
+	field: "count",
+	bbox: BBox,
+) => AsyncIterable<COO<number>>;
 export type COO<T> = [row: number, column: number, value: T];
 
 export class CSRReader {
 	constructor(
-		public pixels: Indexer1D<CoolerDataset["pixels"], "count" | "bin1_id" | "bin2_id">,
+		public pixels: Indexer1D<
+			CoolerDataset["pixels"],
+			"count" | "bin1_id" | "bin2_id"
+		>,
 		public bin1Offsets: Promise<number[]>,
 	) {
 		this.read = this.read.bind(this);
@@ -103,7 +113,9 @@ export class CSRReader {
 	}
 }
 
-async function* transpose<T>(coords: AsyncIterable<COO<T>>): AsyncIterable<COO<T>> {
+async function* transpose<T>(
+	coords: AsyncIterable<COO<T>>,
+): AsyncIterable<COO<T>> {
 	for await (let [i, j, v] of coords) {
 		yield [j, i, v];
 	}
@@ -210,7 +222,9 @@ export class FillLowerRangeQuery2D extends RangeQuery2D {
 		// However, if we are already transposing, we can remove the
 		// operation instead of doing it twice.
 		if (contains(j0, j1, i0, i1, { strict: false })) {
-			let firstFetcher = useTranspose ? reader.read : chain(reader.read, transpose);
+			let firstFetcher = useTranspose
+				? reader.read
+				: chain(reader.read, transpose);
 			return [
 				[firstFetcher, [j0, i0, i0, i1]],
 				[fetcher, [i0, i1, i0, j1]],

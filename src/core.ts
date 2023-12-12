@@ -1,18 +1,35 @@
-import * as zarr from "zarrita/v2";
-import { get } from "zarrita/ndarray";
-// deno-fmt-ignore
-import { consolidated, parseRegion, regionKey, regionToExtent, Shuffle, zip, parseInfo } from "./util";
-import { BBox, CSRReader, FillLowerRangeQuery2D } from "./ranges";
+import * as zarr from "zarrita";
+import type { Readable } from "@zarrita/storage";
 
-import type { Async, Readable } from "zarrita";
-// deno-fmt-ignore
-import type { CoolerDataset, CoolerInfo, Dataset, DataSlice, Extent, Region } from "./types";
+import {
+	consolidated,
+	parseInfo,
+	parseRegion,
+	regionKey,
+	regionToExtent,
+	Shuffle,
+	zip,
+} from "./util.js";
+import { CSRReader, FillLowerRangeQuery2D } from "./ranges.js";
+
+import type {
+	CoolerDataset,
+	CoolerInfo,
+	Dataset,
+	DataSlice,
+	Extent,
+	Region,
+} from "./types.js";
+import type { BBox } from "./ranges.js";
 export type { CoolerDataset, CoolerInfo };
 
 // add shuffle codec to registry
 zarr.registry.set(Shuffle.codecId, () => Shuffle as any);
 
-export class Indexer1D<Source extends Dataset<any, any>, Field extends keyof Source> {
+export class Indexer1D<
+	Source extends Dataset<any, any>,
+	Field extends keyof Source,
+> {
 	constructor(
 		public readonly source: Source,
 		public readonly fields: Field[],
@@ -24,12 +41,15 @@ export class Indexer1D<Source extends Dataset<any, any>, Field extends keyof Sou
 	}
 
 	async slice(end: number | null): Promise<DataSlice<Source, Field>>;
-	async slice(start: number, end: number | null): Promise<DataSlice<Source, Field>>;
+	async slice(
+		start: number,
+		end: number | null,
+	): Promise<DataSlice<Source, Field>>;
 	async slice(a: any, b?: any): Promise<DataSlice<Source, Field>> {
 		let entries = await Promise.all(
 			this.fields.map(async (name) => {
 				let arr = this.source[name];
-				let { data } = await get(arr, [zarr.slice(a, b)]);
+				let { data } = await zarr.get(arr, [zarr.slice(a, b)]);
 				return [name, data];
 			}),
 		);
@@ -44,7 +64,10 @@ export class Indexer1D<Source extends Dataset<any, any>, Field extends keyof Sou
 	}
 }
 
-type Fetcher2D = (region: string | Region, region2?: string | Region) => Promise<BBox>;
+type Fetcher2D = (
+	region: string | Region,
+	region2?: string | Region,
+) => Promise<BBox>;
 
 export class Matrix {
 	constructor(
@@ -69,7 +92,9 @@ export class Matrix {
 		if (balance) {
 			let weights = this.cooler.bins.select(balance);
 			let bias1 = await weights.slice(i0, i1);
-			let bias2 = (i0 === j0 && i1 === j1) ? bias1 : await weights.slice(j0, j1);
+			let bias2 = (i0 === j0 && i1 === j1)
+				? bias1
+				: await weights.slice(j0, j1);
 			for (let i = 0; i < (i1 - i0); i++) {
 				for (let j = 0; j < (j1 - j0); j++) {
 					let offset = i * arr.shape[1] + j;
@@ -87,7 +112,7 @@ export class Matrix {
 	}
 }
 
-export class Cooler<Store extends Async<Readable> = Async<Readable>> {
+export class Cooler<Store extends Readable = Readable> {
 	#cachedChroms?: Record<string, number>;
 	#cachedBin1Offsets?: Promise<number[]>;
 	#extentCache: Record<string, Extent> = {};
@@ -167,10 +192,14 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 		if (key in this.#extentCache) {
 			return this.#extentCache[key];
 		}
-		return (this.#extentCache[key] = await regionToExtent(this, normed, this.binsize));
+		return (this.#extentCache[key] = await regionToExtent(
+			this,
+			normed,
+			this.binsize,
+		));
 	}
 
-	get matrix() {
+	get matrix(): Matrix {
 		let reader = new CSRReader(this.pixels, this.#bin1Offsets);
 		return new Matrix(this, reader, async (region, region2) => {
 			let [[i0, i1], [j0, j1]] = await Promise.all([
@@ -182,12 +211,14 @@ export class Cooler<Store extends Async<Readable> = Async<Readable>> {
 	}
 }
 
-export async function open<Store extends Async<Readable>>(
+export async function open<Store extends Readable>(
 	store: Store,
 	path: `/${string}` = "/",
 ) {
 	// https://zarr.readthedocs.io/en/stable/_modules/zarr/convenience.html#consolidate_metadata
-	let metaKey = `${path.endsWith("/") ? path : `${path}/` as const}.zmetadata` as const;
+	let metaKey = `${
+		path.endsWith("/") ? path : `${path}/` as const
+	}.zmetadata` as const;
 	let bytes = await store.get(metaKey);
 	if (bytes) {
 		let str = new TextDecoder().decode(bytes);
@@ -208,15 +239,14 @@ export async function open<Store extends Async<Readable>>(
 		"pixels/count",
 	] as const;
 
-	let grp = await zarr.get_group(store, path);
-
-	let [info, ...arrays] = await Promise.all([
-		grp.attrs().then(parseInfo),
-		...paths.map((p) => zarr.get_array(grp, p)),
-	]);
+	let root = new zarr.Location(store, path);
+	let grp = await zarr.open(root, { kind: "group" });
+	let arrays = await Promise.all(
+		paths.map((p) => zarr.open(grp.resolve(p), { kind: "array" })),
+	);
 
 	return new Cooler(
-		info,
+		parseInfo(grp.attrs),
 		arrays.reduce((data, arr, i) => {
 			let [grp, col] = paths[i].split("/");
 			if (!data[grp]) data[grp] = {};
