@@ -1,30 +1,32 @@
 {
-  "name": "coolr",
-  "version": "0.0.0",
-  "scripts": {
-    "dev": "vite",
-    "prepack": "mkdist --declaration",
-    "check": "tsc",
-    "fmt": "deno fmt --options-use-tabs --options-line-width 90 src demo.ts"
-  },
-  "files": [
-    "dist/"
-  ],
-  "typings": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "devDependencies": {
-    "mkdist": "0.3.5",
-    "serve-static": "^1.14.1",
-    "typescript": "^4.8.4",
-    "vite": "^2.7.1"
-  },
-  "dependencies": {
-    "numcodecs": "^0.2.2",
-    "zarrita": "^0.2.2"
-  }
+	"name": "coolr",
+	"type": "module",
+	"version": "0.0.0",
+	"scripts": {
+		"dev": "vite",
+		"prepack": "tsc",
+		"check": "tsc --noEmit",
+		"format": "dprint fmt",
+		"lint": "dprint check"
+	},
+	"files": [
+		"dist/"
+	],
+	"exports": {
+		".": {
+			"import": "./dist/src/index.js",
+			"types": "./dist/src/index.d.ts"
+		}
+	},
+	"devDependencies": {
+		"dprint": "^0.43.2",
+		"serve-static": "^1.15.0",
+		"typescript": "^5.3.3",
+		"vite": "^5.0.8"
+	},
+	"dependencies": {
+		"@zarrita/storage": "0.1.0-next.3",
+		"numcodecs": "^0.2.2",
+		"zarrita": "0.4.0-next.6"
+	}
 }

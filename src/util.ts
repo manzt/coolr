@@ -1,7 +1,7 @@
-import type { AbsolutePath, Async, Readable } from "zarrita";
+import type { Readable } from "@zarrita/storage";
 import type { Codec } from "numcodecs";
-import type { CoolerInfo, Extent, NormedRegion, Region } from "./types";
-import type { Cooler } from "./index";
+import type { CoolerInfo, Extent, NormedRegion, Region } from "./types.js";
+import type { Cooler } from "./index.js";
 
 export function zip<A, B>(a: A[], b: ArrayLike<B>): [A, B][] {
 	return a.map((x, i) => [x, b[i]]);
@@ -17,14 +17,14 @@ type ConsolidatedMetadata = {
 };
 
 /** Proxies requests to the underlying store. */
-export function consolidated<Store extends Async<Readable>>(
+export function consolidated<Store extends Readable>(
 	store: Store,
 	{ metadata }: ConsolidatedMetadata,
 ) {
 	let encoder = new TextEncoder();
 	let get = (target: Store, prop: string) => {
 		if (prop === "get") {
-			return (key: AbsolutePath) => {
+			return (key: `/${string}`) => {
 				let prefix = key.slice(1);
 				if (prefix in metadata) {
 					let str = JSON.stringify(metadata[prefix]);
@@ -97,7 +97,9 @@ export function parseRegion(
 	region: string | Region,
 	chromsizes: Record<string, number>,
 ): NormedRegion {
-	let [chr, start, end] = typeof region === "string" ? parseRegionStr(region) : region;
+	let [chr, start, end] = typeof region === "string"
+		? parseRegionStr(region)
+		: region;
 	let clen = chromsizes[chr];
 	if (!clen) {
 		throw new Error(`Unknown sequence label: ${chr}.`);

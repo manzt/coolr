@@ -1,10 +1,7 @@
 import { defineConfig } from "vite";
 import serveStatic from "serve-static";
 
-export default defineConfig({ 
-	resolve: {
-		alias: { "@manzt/coolr": "./src/index.ts" },
-	},
+export default defineConfig({
 	plugins: [
 		{
 			name: "server-data-dir",
@@ -13,8 +10,8 @@ export default defineConfig({
 				server.middlewares.use(
 					"/@data",
 					serveStatic("./data", { dotfiles: "allow" }),
-				)
+				);
 			},
-		}
-	]
+		},
+	],
 });

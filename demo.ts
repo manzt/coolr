@@ -1,6 +1,8 @@
-import * as cooler from "@manzt/coolr";
+import * as cooler from "./src/index.js";
 
 let base = new URL("/@data/", import.meta.url);
+base.pathname = base.pathname.replace("/@fs", "") + "/";
+console.log(base.href);
 
 function scaleFn(max: number, min: number = 0) {
 	let a = 0;
@@ -8,7 +10,9 @@ function scaleFn(max: number, min: number = 0) {
 	return (x: number) => (b - a) * (x - min) / (max - min) + a;
 }
 
-let resolutions = await cooler.mcool(new URL("test.mcool.remote.json", base).href);
+let resolutions = await cooler.mcool(
+	new URL("test.mcool.remote.json", base).href,
+);
 
 // get highest resolution
 let [name, c] = resolutions[0];

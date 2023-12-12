@@ -1,22 +1,13 @@
 {
 	"compilerOptions": {
-		"target": "ESNext",
-		"module": "ESNext",
-		"useDefineForClassFields": true,
-		"lib": ["ESNext", "DOM"],
-		"moduleResolution": "node",
+		"outDir": "dist",
+		"module": "esnext",
+		"target": "esnext",
+		"moduleResolution": "nodenext",
 		"strict": true,
-		"sourceMap": true,
-		"resolveJsonModule": true,
-		"esModuleInterop": true,
-		"noEmit": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
-		"noImplicitReturns": true,
-		"noImplicitAny": true,
-		"paths": {
-			"@manzt/coolr": ["./src/index.ts"]
-		}
-	},
-	"include": ["./demo.ts", "./src"]
+		"declaration": true,
+		"allowSyntheticDefaultImports": true,
+		"verbatimModuleSyntax": true,
+		"skipLibCheck": true
+	}
 }
